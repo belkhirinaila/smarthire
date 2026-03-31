@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+
 import 'package:smarthire_app/features/splash/onboarding_screen.dart';
 import 'package:smarthire_app/features/splash/welcome_screen.dart';
+
 import 'package:smarthire_app/features/auth/login_screen.dart';
 import 'package:smarthire_app/features/auth/signup_screen.dart';
 import 'package:smarthire_app/features/auth/reset_password_screen.dart';
@@ -11,7 +13,19 @@ import 'package:smarthire_app/features/auth/password_success_screen.dart';
 import 'package:smarthire_app/features/auth/otp_screen.dart';
 import 'package:smarthire_app/features/auth/success_screen.dart';
 import 'package:smarthire_app/features/auth/role_screen.dart';
-import 'package:smarthire_app/features/candidate/candidate_home_screen.dart';
+
+import 'package:smarthire_app/features/candidate/candidate_main_screen.dart';
+import 'package:smarthire_app/features/candidate/jobs/job_details_screen.dart';
+import 'package:smarthire_app/features/candidate/applications/application_submission_screen.dart';
+import 'package:smarthire_app/features/candidate/applications/application_success_screen.dart';
+import 'package:smarthire_app/features/candidate/applications/application_details_screen.dart';
+import 'package:smarthire_app/features/candidate/profile/edit_profile_screen.dart';
+import 'package:smarthire_app/features/candidate/profile/cv_skills_screen.dart';
+import 'package:smarthire_app/features/candidate/profile/experience_education_screen.dart';
+import 'package:smarthire_app/features/candidate/profile/privacy_visibility_screen.dart';
+import 'package:smarthire_app/features/candidate/requests/request_decision_screen.dart';
+import 'package:smarthire_app/features/candidate/direct_chat_thread_screen.dart';
+
 import 'package:smarthire_app/features/company/company_home_screen.dart';
 import 'package:smarthire_app/features/admin/admin_home_screen.dart';
 
@@ -28,31 +42,73 @@ class SmartHireApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       initialRoute: '/',
       routes: {
+        /// ==============================
+        /// Splash / Onboarding
+        /// ==============================
         '/': (context) => const SplashScreen(),
         '/onboarding': (context) => const OnboardingScreen(),
         '/welcome': (context) => const WelcomeScreen(),
+
+        /// ==============================
+        /// Auth
+        /// ==============================
         '/login': (context) => const LoginScreen(),
         '/signup': (context) => const SignupScreen(),
         '/reset-password': (context) => const ResetPasswordScreen(),
         '/reset-otp': (context) {
-         final args =
-         ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
-         return ResetOtpScreen(email: args['email']);
+          final args =
+              ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
+          return ResetOtpScreen(email: args['email']);
         },
         '/new-password': (context) => const NewPasswordScreen(),
         '/password-success': (context) => const PasswordSuccessScreen(),
         '/otp': (context) {
-          final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
+          final args =
+              ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
           return OtpScreen(email: args['email']);
-       },
+        },
         '/success': (context) => const SuccessScreen(),
         '/role': (context) => const RoleScreen(),
-        '/candidate': (context) => const CandidateHomeScreen(),
+
+        /// ==============================
+        /// Candidate - shell principal
+        /// ==============================
+        '/candidate': (context) => const CandidateMainScreen(),
+
+        /// ==============================
+        /// Candidate - jobs flow
+        /// ==============================
+        '/job-details': (context) => const JobDetailsScreen(),
+        '/apply': (context) => const ApplicationSubmissionScreen(),
+        '/application-success': (context) => const ApplicationSuccessScreen(),
+        '/application-details': (context) => const ApplicationDetailsScreen(),
+
+        /// ==============================
+        /// Candidate - profile flow
+        /// ==============================
+        '/edit-profile': (context) => const EditProfileScreen(),
+        '/cv-skills': (context) => const CvSkillsScreen(),
+        '/experience-education': (context) =>
+            const ExperienceEducationScreen(),
+        '/privacy-visibility': (context) => const PrivacyVisibilityScreen(),
+
+        /// ==============================
+        /// Candidate - requests / messages flow
+        /// ==============================
+        '/request-decision': (context) => const RequestDecisionScreen(),
+        '/direct-chat': (context) => const DirectChatThreadScreen(),
+
+        /// ==============================
+        /// Company / Admin
+        /// ==============================
         '/company': (context) => const CompanyHomeScreen(),
         '/admin': (context) => const AdminHomeScreen(),
-       '/home': (context) => const Scaffold(
-  body: Center(child: Text('Home Screen')),
-),
+
+        '/home': (context) => const Scaffold(
+              body: Center(
+                child: Text('Home Screen'),
+              ),
+            ),
       },
     );
   }

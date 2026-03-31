@@ -14,19 +14,19 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   final List<_OnboardData> pages = const [
     _OnboardData(
-      imagePath: 'assets/images/onboarding_1.png',
+      imagePath: 'assets/images/sh.jpeg',
       title: 'Discover Careers\nin Algeria',
       subtitle:
           'Access the best opportunities across all\n58 wilayas, tailored to your skills and\nlocation.',
     ),
     // Tu peux remplacer par tes vraies pages après
     _OnboardData(
-      imagePath: 'assets/images/onboarding_1.png',
+      imagePath: 'assets/images/sh.jpeg',
       title: 'Apply Faster\nwith SmartHire',
       subtitle: 'Save your profile and apply to jobs in\nseconds with one tap.',
     ),
     _OnboardData(
-      imagePath: 'assets/images/onboarding_1.png',
+      imagePath: 'assets/images/sh.jpeg',
       title: 'Get Matched\nSmartly',
       subtitle: 'We suggest offers based on your skills,\nexperience, and preferences.',
     ),
