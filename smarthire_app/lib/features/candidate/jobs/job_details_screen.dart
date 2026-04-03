@@ -1,4 +1,7 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 class JobDetailsScreen extends StatefulWidget {
   const JobDetailsScreen({super.key});
@@ -9,6 +12,11 @@ class JobDetailsScreen extends StatefulWidget {
 
 class _JobDetailsScreenState extends State<JobDetailsScreen> {
   /// ==============================
+  /// Base URL API
+  /// ==============================
+  static const String baseUrl = 'http://192.168.100.47:5000/api';
+
+  /// ==============================
   /// Couleurs principales
   /// ==============================
   static const Color primaryBlue = Color(0xFF1E6CFF);
@@ -17,37 +25,243 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
   static const Color cardColor = Color(0xFF121C31);
 
   /// ==============================
-  /// Etat local pour bookmark
-  /// Plus tard, cet état pourra venir depuis l'API
+  /// Etats
   /// ==============================
   bool isSaved = false;
+  bool isLoading = true;
+  bool isSaving = false;
+  String? errorMessage;
+  Map<String, dynamic>? job;
+
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(() => fetchJob());
+  }
+
+  /// ==============================
+  /// Récupérer les détails du job
+  /// ==============================
+  Future<void> fetchJob() async {
+    try {
+      final args =
+          ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+
+      final jobId = args?['id'];
+
+      if (jobId == null) {
+        setState(() {
+          isLoading = false;
+          errorMessage = "Job ID introuvable";
+        });
+        return;
+      }
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/jobs/$jobId'),
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        job = data['job'];
+
+        /// Vérifier si ce job est déjà sauvegardé
+        await checkIfSaved(jobId);
+
+        if (!mounted) return;
+        setState(() {
+          isLoading = false;
+          errorMessage = null;
+        });
+      } else {
+        setState(() {
+          isLoading = false;
+          errorMessage = data['message'] ?? "Erreur lors du chargement du job";
+        });
+      }
+    } catch (e) {
+      setState(() {
+        isLoading = false;
+        errorMessage = "Erreur de connexion";
+      });
+    }
+  }
+
+  /// ==============================
+  /// Vérifier si le job est déjà sauvegardé
+  /// ==============================
+  Future<void> checkIfSaved(dynamic jobId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token');
+
+      if (token == null || token.isEmpty) {
+        isSaved = false;
+        return;
+      }
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/saved-jobs/me'),
+        headers: {
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final List<dynamic> savedJobs = data['jobs'] ?? [];
+
+        isSaved = savedJobs.any((savedJob) => savedJob['id'] == jobId);
+      } else {
+        isSaved = false;
+      }
+    } catch (e) {
+      isSaved = false;
+    }
+  }
+
+  /// ==============================
+  /// Sauvegarder / supprimer des favoris
+  /// ==============================
+  Future<void> toggleSaveJob() async {
+    final currentJobId = job?['id'];
+
+    if (currentJobId == null || isSaving) return;
+
+    setState(() {
+      isSaving = true;
+    });
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token');
+
+      if (token == null || token.isEmpty) {
+        if (!mounted) return;
+        setState(() {
+          isSaving = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Token introuvable. Veuillez vous reconnecter."),
+          ),
+        );
+        return;
+      }
+
+      http.Response response;
+
+      if (!isSaved) {
+        response = await http.post(
+          Uri.parse('$baseUrl/saved-jobs'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+          body: jsonEncode({
+            'job_id': currentJobId,
+          }),
+        );
+      } else {
+        response = await http.delete(
+          Uri.parse('$baseUrl/saved-jobs/$currentJobId'),
+          headers: {
+            'Authorization': 'Bearer $token',
+          },
+        );
+      }
+
+      final data = jsonDecode(response.body);
+
+      if (!mounted) return;
+
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        final bool newSavedState = !isSaved;
+
+        setState(() {
+          isSaved = newSavedState;
+          isSaving = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              data['message'] ??
+                  (newSavedState
+                      ? "Job sauvegardé"
+                      : "Job supprimé des favoris"),
+            ),
+          ),
+        );
+      } else {
+        setState(() {
+          isSaving = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              data['message'] ?? "Erreur lors de la sauvegarde",
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        isSaving = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Erreur de connexion au serveur"),
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    /// ==============================
-    /// Récupération des données envoyées depuis l'écran précédent
-    /// Si aucune donnée n'est envoyée, on met des valeurs visuelles minimales
-    /// ==============================
-    final args =
-        ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+    if (isLoading) {
+      return const Scaffold(
+        backgroundColor: backgroundBottom,
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
 
-    final String title = args?['title'] ?? "Job title";
-    final String company = args?['company'] ?? "Company name";
-    final String location = args?['location'] ?? "Location";
-    final String salary = args?['salary'] ?? "Salary";
-    final String type = args?['type'] ?? "FULL-TIME";
+    if (errorMessage != null) {
+      return Scaffold(
+        backgroundColor: backgroundBottom,
+        body: Center(
+          child: Padding(
+            padding: EdgeInsets.all(24),
+            child: Text(
+              errorMessage!,
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+        ),
+      );
+    }
+
+    final String title = job?['title'] ?? "Job title";
+    final String company = job?['company_name'] ?? "Company name";
+    final String location = job?['location'] ?? "Location";
+    final String salary = job?['salary']?.toString() ?? "Salary";
+    final String type = job?['type']?.toString() ?? "FULL-TIME";
     final String description =
-        args?['description'] ?? "No description available for this job yet.";
+        job?['description'] ?? "No description available for this job yet.";
 
     final List<dynamic> requirements =
-        args?['requirements'] ??
-            [
-              "Requirement 1",
-              "Requirement 2",
-              "Requirement 3",
-            ];
+        job?['requirements'] is List ? job!['requirements'] : [];
 
     return Scaffold(
+      backgroundColor: backgroundBottom,
       extendBody: true,
       body: Container(
         width: double.infinity,
@@ -61,9 +275,6 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
         child: SafeArea(
           child: Column(
             children: [
-              /// ==============================
-              /// Contenu principal scrollable
-              /// ==============================
               Expanded(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.fromLTRB(18, 14, 18, 120),
@@ -71,9 +282,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _buildTopBar(),
-
                       const SizedBox(height: 22),
-
                       _buildCompanyCard(
                         title: title,
                         company: company,
@@ -81,31 +290,18 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
                         salary: salary,
                         type: type,
                       ),
-
                       const SizedBox(height: 26),
-
                       _buildSectionTitle("Job Description"),
-
                       const SizedBox(height: 12),
-
                       _buildDescriptionCard(description),
-
                       const SizedBox(height: 24),
-
                       _buildSectionTitle("Requirements"),
-
                       const SizedBox(height: 12),
-
                       _buildRequirementsCard(requirements),
-
                       const SizedBox(height: 24),
-
                       _buildSectionTitle("About this role"),
-
                       const SizedBox(height: 12),
-
                       _buildAboutRoleCard(),
-
                       const SizedBox(height: 30),
                     ],
                   ),
@@ -115,11 +311,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
           ),
         ),
       ),
-
-      /// ==============================
-      /// Bottom action bar
-      /// ==============================
-      bottomNavigationBar: _buildBottomActionBar(args),
+      bottomNavigationBar: _buildBottomActionBar(),
     );
   }
 
@@ -129,7 +321,6 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
   Widget _buildTopBar() {
     return Row(
       children: [
-        /// Bouton retour
         GestureDetector(
           onTap: () => Navigator.pop(context),
           child: Container(
@@ -147,9 +338,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
             ),
           ),
         ),
-
         const Spacer(),
-
         const Text(
           "Job Details",
           style: TextStyle(
@@ -158,16 +347,9 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
             fontWeight: FontWeight.w800,
           ),
         ),
-
         const Spacer(),
-
-        /// Bouton bookmark
         GestureDetector(
-          onTap: () {
-            setState(() {
-              isSaved = !isSaved;
-            });
-          },
+          onTap: toggleSaveJob,
           child: Container(
             width: 48,
             height: 48,
@@ -176,13 +358,21 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: Colors.white.withOpacity(0.05)),
             ),
-            child: Icon(
-              isSaved
-                  ? Icons.bookmark_rounded
-                  : Icons.bookmark_border_rounded,
-              color: isSaved ? primaryBlue : Colors.white,
-              size: 24,
-            ),
+            child: isSaving
+                ? const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : Icon(
+                    isSaved
+                        ? Icons.bookmark_rounded
+                        : Icons.bookmark_border_rounded,
+                    color: isSaved ? primaryBlue : Colors.white,
+                    size: 24,
+                  ),
           ),
         ),
       ],
@@ -209,7 +399,6 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
       ),
       child: Column(
         children: [
-          /// Logo entreprise
           Container(
             width: 76,
             height: 76,
@@ -223,10 +412,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
               size: 36,
             ),
           ),
-
           const SizedBox(height: 18),
-
-          /// Titre du job
           Text(
             title,
             textAlign: TextAlign.center,
@@ -237,10 +423,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
               height: 1.2,
             ),
           ),
-
           const SizedBox(height: 8),
-
-          /// Entreprise + localisation
           Text(
             "$company • $location",
             textAlign: TextAlign.center,
@@ -250,10 +433,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
               fontWeight: FontWeight.w500,
             ),
           ),
-
           const SizedBox(height: 18),
-
-          /// Badges visuels
           Wrap(
             spacing: 10,
             runSpacing: 10,
@@ -276,10 +456,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
               ),
             ],
           ),
-
           const SizedBox(height: 22),
-
-          /// Petites infos complémentaires
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -346,6 +523,26 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
   /// Carte des requirements
   /// ==============================
   Widget _buildRequirementsCard(List<dynamic> requirements) {
+    if (requirements.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: cardColor,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: Colors.white.withOpacity(0.04)),
+        ),
+        child: Text(
+          "No specific requirements available yet.",
+          style: TextStyle(
+            color: Colors.white.withOpacity(0.72),
+            fontSize: 15,
+            height: 1.5,
+          ),
+        ),
+      );
+    }
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
@@ -548,7 +745,9 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
   /// ==============================
   /// Barre d'action en bas
   /// ==============================
-  Widget _buildBottomActionBar(Map<String, dynamic>? args) {
+  Widget _buildBottomActionBar() {
+    final currentJob = job;
+
     return Container(
       padding: const EdgeInsets.fromLTRB(18, 14, 18, 24),
       decoration: BoxDecoration(
@@ -559,36 +758,42 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
       ),
       child: Row(
         children: [
-          /// Bouton save
-          Container(
-            width: 58,
-            height: 58,
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.06),
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: Colors.white.withOpacity(0.05)),
-            ),
-            child: Icon(
-              isSaved
-                  ? Icons.bookmark_rounded
-                  : Icons.bookmark_border_rounded,
-              color: isSaved ? primaryBlue : Colors.white,
+          GestureDetector(
+            onTap: toggleSaveJob,
+            child: Container(
+              width: 58,
+              height: 58,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.06),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: Colors.white.withOpacity(0.05)),
+              ),
+              child: isSaving
+                  ? const Padding(
+                      padding: EdgeInsets.all(14),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : Icon(
+                      isSaved
+                          ? Icons.bookmark_rounded
+                          : Icons.bookmark_border_rounded,
+                      color: isSaved ? primaryBlue : Colors.white,
+                    ),
             ),
           ),
-
           const SizedBox(width: 14),
-
-          /// Bouton principal Apply
           Expanded(
             child: SizedBox(
               height: 58,
               child: ElevatedButton(
                 onPressed: () {
-                  /// Navigation vers l'écran Apply
                   Navigator.pushNamed(
                     context,
                     '/apply',
-                    arguments: args,
+                    arguments: currentJob,
                   );
                 },
                 style: ElevatedButton.styleFrom(

@@ -1,4 +1,7 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 class RequestDecisionScreen extends StatefulWidget {
   const RequestDecisionScreen({super.key});
@@ -8,42 +11,108 @@ class RequestDecisionScreen extends StatefulWidget {
 }
 
 class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
-  /// ==============================
-  /// Couleurs principales
-  /// ==============================
   static const Color primaryBlue = Color(0xFF1E6CFF);
   static const Color backgroundTop = Color(0xFF08162D);
   static const Color backgroundBottom = Color(0xFF050A12);
   static const Color cardColor = Color(0xFF121C31);
 
-  /// Etats loading des boutons
+  static const String baseUrl = 'http://192.168.100.47:5000/api';
+
   bool isAccepting = false;
   bool isDeclining = false;
 
-  @override
-  Widget build(BuildContext context) {
-    /// ==============================
-    /// Données reçues depuis inbox
-    /// Si rien n'est envoyé, on met des valeurs visuelles temporaires
-    /// ==============================
+  Future<void> _updateRequestStatus(String status) async {
     final args =
         ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
 
-    final String company = args?['company'] ?? "Company name";
-    final String title = args?['title'] ?? "Interview invitation";
+    final requestId = args?['id'];
+
+    if (requestId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Request ID introuvable")),
+      );
+      return;
+    }
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token');
+
+      if (token == null || token.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Token introuvable")),
+        );
+        return;
+      }
+
+      final response = await http.put(
+        Uri.parse('$baseUrl/requests/$requestId'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'status': status}),
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (!mounted) return;
+
+      if (response.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(data['message'] ?? "Request mise à jour"),
+          ),
+        );
+        Navigator.pop(context);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(data['message'] ?? "Erreur lors de la mise à jour"),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Erreur de connexion au serveur")),
+      );
+    }
+  }
+
+  Future<void> _acceptRequest() async {
+    setState(() => isAccepting = true);
+    await _updateRequestStatus('approved');
+    if (mounted) {
+      setState(() => isAccepting = false);
+    }
+  }
+
+  Future<void> _declineRequest() async {
+    setState(() => isDeclining = true);
+    await _updateRequestStatus('rejected');
+    if (mounted) {
+      setState(() => isDeclining = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final args =
+        ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+
+    final String company = args?['company'] ?? "Recruiter";
+    final String title = args?['title'] ?? "Access Request";
     final String subtitle =
-        args?['subtitle'] ??
-        "We would like to discuss an opportunity with you.";
+        args?['subtitle'] ?? "A recruiter wants to access your profile.";
     final String time = args?['time'] ?? "Recently";
-    final String type = args?['type'] ?? "REQUEST";
+    final String type = args?['type'] ?? "PENDING";
     final Color badgeColor = args?['color'] ?? primaryBlue;
 
-    /// Texte plus détaillé temporaire
     final String longDescription =
         args?['description'] ??
-        "This request has been sent by a recruiter through the platform. "
-            "You can accept it to continue the conversation, decline it, "
-            "or open a direct chat to discuss the opportunity in more detail.";
+            "This recruiter sent you an access request through the platform. "
+                "You can approve it to allow further interaction or reject it to close this request.";
 
     return Scaffold(
       backgroundColor: backgroundBottom,
@@ -66,9 +135,7 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _buildTopBar(context),
-
                       const SizedBox(height: 24),
-
                       _buildMainCard(
                         company: company,
                         title: title,
@@ -77,31 +144,18 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
                         type: type,
                         badgeColor: badgeColor,
                       ),
-
                       const SizedBox(height: 24),
-
                       _buildSectionTitle("Request Details"),
-
                       const SizedBox(height: 12),
-
                       _buildDescriptionCard(longDescription),
-
                       const SizedBox(height: 24),
-
                       _buildSectionTitle("What can you do?"),
-
                       const SizedBox(height: 12),
-
                       _buildActionsInfoCard(),
-
                       const SizedBox(height: 24),
-
                       _buildSectionTitle("Contact Overview"),
-
                       const SizedBox(height: 12),
-
-                      _buildContactOverviewCard(company, time),
-
+                      _buildContactOverviewCard(company, time, type),
                       const SizedBox(height: 30),
                     ],
                   ),
@@ -111,17 +165,10 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
           ),
         ),
       ),
-
-      /// ==============================
-      /// Actions du bas
-      /// ==============================
       bottomNavigationBar: _buildBottomBar(context, args),
     );
   }
 
-  /// ==============================
-  /// Barre supérieure
-  /// ==============================
   Widget _buildTopBar(BuildContext context) {
     return Row(
       children: [
@@ -170,9 +217,6 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
     );
   }
 
-  /// ==============================
-  /// Carte principale de la request
-  /// ==============================
   Widget _buildMainCard({
     required String company,
     required String title,
@@ -236,9 +280,7 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
               ),
             ],
           ),
-
           const SizedBox(height: 18),
-
           Align(
             alignment: Alignment.centerLeft,
             child: Text(
@@ -250,9 +292,7 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
               ),
             ),
           ),
-
           const SizedBox(height: 18),
-
           Row(
             children: [
               _buildTypeBadge(
@@ -284,9 +324,6 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
     );
   }
 
-  /// ==============================
-  /// Titre de section
-  /// ==============================
   Widget _buildSectionTitle(String title) {
     return Text(
       title,
@@ -298,9 +335,6 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
     );
   }
 
-  /// ==============================
-  /// Carte description
-  /// ==============================
   Widget _buildDescriptionCard(String text) {
     return Container(
       width: double.infinity,
@@ -321,9 +355,6 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
     );
   }
 
-  /// ==============================
-  /// Carte infos d'actions
-  /// ==============================
   Widget _buildActionsInfoCard() {
     return Container(
       width: double.infinity,
@@ -338,29 +369,26 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
           _ActionInfoRow(
             icon: Icons.check_circle_outline_rounded,
             title: "Accept",
-            subtitle: "Continue with the recruiter and keep the request active.",
+            subtitle: "Approve the request and allow the recruiter to continue.",
           ),
           SizedBox(height: 16),
           _ActionInfoRow(
             icon: Icons.cancel_outlined,
             title: "Decline",
-            subtitle: "Refuse the request and close the current interaction.",
+            subtitle: "Reject the request and close this interaction.",
           ),
           SizedBox(height: 16),
           _ActionInfoRow(
             icon: Icons.chat_bubble_outline_rounded,
             title: "Open Chat",
-            subtitle: "Discuss directly with the recruiter before deciding.",
+            subtitle: "Open or continue the direct conversation.",
           ),
         ],
       ),
     );
   }
 
-  /// ==============================
-  /// Carte résumé contact
-  /// ==============================
-  Widget _buildContactOverviewCard(String company, String time) {
+  Widget _buildContactOverviewCard(String company, String time, String status) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
@@ -373,7 +401,7 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
         children: [
           _buildInfoRow(
             icon: Icons.business_center_outlined,
-            label: "Company",
+            label: "Recruiter",
             value: company,
           ),
           const SizedBox(height: 16),
@@ -386,16 +414,13 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
           _buildInfoRow(
             icon: Icons.verified_user_outlined,
             label: "Status",
-            value: "Pending decision",
+            value: status,
           ),
         ],
       ),
     );
   }
 
-  /// ==============================
-  /// Ligne d'information
-  /// ==============================
   Widget _buildInfoRow({
     required IconData icon,
     required String label,
@@ -438,9 +463,6 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
     );
   }
 
-  /// ==============================
-  /// Badge type
-  /// ==============================
   Widget _buildTypeBadge({
     required String text,
     required Color color,
@@ -463,9 +485,6 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
     );
   }
 
-  /// ==============================
-  /// Barre du bas avec actions
-  /// ==============================
   Widget _buildBottomBar(
     BuildContext context,
     Map<String, dynamic>? args,
@@ -570,63 +589,8 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
       ),
     );
   }
-
-  /// ==============================
-  /// Accept temporaire
-  /// Plus tard: appel backend
-  /// ==============================
-  void _acceptRequest() async {
-    setState(() {
-      isAccepting = true;
-    });
-
-    await Future.delayed(const Duration(seconds: 1));
-
-    if (!mounted) return;
-
-    setState(() {
-      isAccepting = false;
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text("Request accepted successfully"),
-      ),
-    );
-
-    Navigator.pop(context);
-  }
-
-  /// ==============================
-  /// Decline temporaire
-  /// Plus tard: appel backend
-  /// ==============================
-  void _declineRequest() async {
-    setState(() {
-      isDeclining = true;
-    });
-
-    await Future.delayed(const Duration(seconds: 1));
-
-    if (!mounted) return;
-
-    setState(() {
-      isDeclining = false;
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text("Request declined"),
-      ),
-    );
-
-    Navigator.pop(context);
-  }
 }
 
-/// ==============================
-/// Widget réutilisable pour actions info
-/// ==============================
 class _ActionInfoRow extends StatelessWidget {
   final IconData icon;
   final String title;

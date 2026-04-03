@@ -1,4 +1,7 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ApplicationsListScreen extends StatefulWidget {
   const ApplicationsListScreen({super.key});
@@ -13,56 +16,77 @@ class _ApplicationsListScreenState extends State<ApplicationsListScreen> {
   static const Color backgroundBottom = Color(0xFF050A12);
   static const Color cardColor = Color(0xFF121C31);
 
+  static const String baseUrl = 'http://192.168.100.47:5000/api';
+
   int selectedTabIndex = 0;
 
   final List<String> tabs = [
     "All",
     "Active",
-    "Interviewing",
-    "Closed",
-  ];
-
-  final List<Map<String, dynamic>> applications = [
-    {
-      "title": "Job title",
-      "company": "Company name",
-      "location": "Location",
-      "status": "INTERVIEW",
-      "date": "Applied recently",
-      "statusColor": const Color(0xFF1E6CFF),
-    },
-    {
-      "title": "Job title",
-      "company": "Company name",
-      "location": "Location",
-      "status": "UNDER REVIEW",
-      "date": "Applied recently",
-      "statusColor": const Color(0xFFFFB020),
-    },
-    {
-      "title": "Job title",
-      "company": "Company name",
-      "location": "Location",
-      "status": "REJECTED",
-      "date": "Closed recently",
-      "statusColor": const Color(0xFFFF5A6E),
-    },
-    {
-      "title": "Job title",
-      "company": "Company name",
-      "location": "Location",
-      "status": "ACTIVE",
-      "date": "Applied recently",
-      "statusColor": const Color(0xFF22C55E),
-    },
+    "Accepted",
+    "Rejected",
   ];
 
   final TextEditingController searchController = TextEditingController();
+
+  List<dynamic> applications = [];
+  bool isLoading = true;
+  String? errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    fetchApplications();
+  }
 
   @override
   void dispose() {
     searchController.dispose();
     super.dispose();
+  }
+
+  Future<void> fetchApplications() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token');
+
+      if (token == null || token.isEmpty) {
+        setState(() {
+          isLoading = false;
+          errorMessage = "Token introuvable. Veuillez vous reconnecter.";
+        });
+        return;
+      }
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/applications/me'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        setState(() {
+          applications = data['applications'] ?? [];
+          isLoading = false;
+          errorMessage = null;
+        });
+      } else {
+        setState(() {
+          isLoading = false;
+          errorMessage =
+              data['message'] ?? "Erreur lors du chargement des candidatures";
+        });
+      }
+    } catch (e) {
+      setState(() {
+        isLoading = false;
+        errorMessage = "Erreur de connexion au serveur";
+      });
+    }
   }
 
   void openApplicationDetails(Map<String, dynamic> application) {
@@ -71,6 +95,83 @@ class _ApplicationsListScreenState extends State<ApplicationsListScreen> {
       '/application-details',
       arguments: application,
     );
+  }
+
+  String formatDate(dynamic createdAt) {
+    if (createdAt == null) return "Applied recently";
+
+    final raw = createdAt.toString();
+    if (raw.length >= 10) {
+      return "Applied on ${raw.substring(0, 10)}";
+    }
+    return "Applied recently";
+  }
+
+  Color getStatusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'accepted':
+        return const Color(0xFF22C55E);
+      case 'rejected':
+        return const Color(0xFFFF5A6E);
+      case 'pending':
+        return const Color(0xFFFFB020);
+      default:
+        return primaryBlue;
+    }
+  }
+
+  String getDisplayStatus(String status) {
+    switch (status.toLowerCase()) {
+      case 'accepted':
+        return 'ACCEPTED';
+      case 'rejected':
+        return 'REJECTED';
+      case 'pending':
+        return 'PENDING';
+      default:
+        return status.toUpperCase();
+    }
+  }
+
+  List<dynamic> get filteredApplications {
+    List<dynamic> result = List.from(applications);
+
+    final query = searchController.text.trim().toLowerCase();
+    if (query.isNotEmpty) {
+      result = result.where((application) {
+        final title = (application['title'] ?? '').toString().toLowerCase();
+        final company =
+            (application['company_name'] ?? '').toString().toLowerCase();
+        final location =
+            (application['location'] ?? '').toString().toLowerCase();
+
+        return title.contains(query) ||
+            company.contains(query) ||
+            location.contains(query);
+      }).toList();
+    }
+
+    if (selectedTabIndex == 1) {
+      result = result
+          .where((application) =>
+              (application['status'] ?? '').toString().toLowerCase() ==
+              'pending')
+          .toList();
+    } else if (selectedTabIndex == 2) {
+      result = result
+          .where((application) =>
+              (application['status'] ?? '').toString().toLowerCase() ==
+              'accepted')
+          .toList();
+    } else if (selectedTabIndex == 3) {
+      result = result
+          .where((application) =>
+              (application['status'] ?? '').toString().toLowerCase() ==
+              'rejected')
+          .toList();
+    }
+
+    return result;
   }
 
   @override
@@ -101,7 +202,7 @@ class _ApplicationsListScreenState extends State<ApplicationsListScreen> {
                       const SizedBox(height: 18),
                       _buildTabs(),
                       const SizedBox(height: 18),
-                      _buildApplicationsList(),
+                      _buildBodyContent(),
                     ],
                   ),
                 ),
@@ -110,6 +211,181 @@ class _ApplicationsListScreenState extends State<ApplicationsListScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildBodyContent() {
+    if (isLoading) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.only(top: 40),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (errorMessage != null) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: cardColor,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: Colors.white.withOpacity(0.04)),
+        ),
+        child: Column(
+          children: [
+            Text(
+              errorMessage!,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.75),
+                fontSize: 15,
+              ),
+            ),
+            const SizedBox(height: 14),
+            ElevatedButton(
+              onPressed: () {
+                setState(() {
+                  isLoading = true;
+                  errorMessage = null;
+                });
+                fetchApplications();
+              },
+              child: const Text("Réessayer"),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (filteredApplications.isEmpty) {
+      return _buildEmptyState();
+    }
+
+    return Column(
+      children: filteredApplications.map((application) {
+        final status = (application["status"] ?? "pending").toString();
+        final statusColor = getStatusColor(status);
+
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 14),
+          child: GestureDetector(
+            onTap: () => openApplicationDetails(application),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: cardColor,
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(color: Colors.white.withOpacity(0.04)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 58,
+                    height: 58,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.06),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: const Icon(
+                      Icons.business_rounded,
+                      color: Colors.white54,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          application["title"] ?? "",
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          "${application["company_name"] ?? ""} • ${application["location"] ?? ""}",
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.55),
+                            fontSize: 15,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          application["salary"]?.toString() ?? "",
+                          style: const TextStyle(
+                            color: primaryBlue,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.access_time_filled_rounded,
+                              size: 15,
+                              color: Colors.white.withOpacity(0.45),
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                formatDate(application["created_at"]),
+                                style: TextStyle(
+                                  color: Colors.white.withOpacity(0.45),
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      _buildStatusBadge(
+                        text: getDisplayStatus(status),
+                        color: statusColor,
+                      ),
+                      const SizedBox(height: 42),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: const Text(
+                          "View Details",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      }).toList(),
     );
   }
 
@@ -180,6 +456,9 @@ class _ApplicationsListScreenState extends State<ApplicationsListScreen> {
       ),
       child: TextField(
         controller: searchController,
+        onChanged: (_) {
+          setState(() {});
+        },
         style: const TextStyle(color: Colors.white),
         decoration: InputDecoration(
           border: InputBorder.none,
@@ -243,125 +522,6 @@ class _ApplicationsListScreenState extends State<ApplicationsListScreen> {
           );
         },
       ),
-    );
-  }
-
-  Widget _buildApplicationsList() {
-    if (applications.isEmpty) {
-      return _buildEmptyState();
-    }
-
-    return Column(
-      children: applications.map((application) {
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 14),
-          child: GestureDetector(
-            onTap: () => openApplicationDetails(application),
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: cardColor,
-                borderRadius: BorderRadius.circular(22),
-                border: Border.all(color: Colors.white.withOpacity(0.04)),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 58,
-                    height: 58,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.06),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: const Icon(
-                      Icons.business_rounded,
-                      color: Colors.white54,
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          application["title"] ?? "",
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          "${application["company"] ?? ""} • ${application["location"] ?? ""}",
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.55),
-                            fontSize: 15,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.access_time_filled_rounded,
-                              size: 15,
-                              color: Colors.white.withOpacity(0.45),
-                            ),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Text(
-                                application["date"] ?? "",
-                                style: TextStyle(
-                                  color: Colors.white.withOpacity(0.45),
-                                  fontSize: 13,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      _buildStatusBadge(
-                        text: application["status"] ?? "",
-                        color: application["statusColor"] ?? primaryBlue,
-                      ),
-                      const SizedBox(height: 42),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 10,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.08),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: const Text(
-                          "View Details",
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      }).toList(),
     );
   }
 

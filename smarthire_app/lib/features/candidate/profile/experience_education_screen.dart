@@ -1,4 +1,7 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ExperienceEducationScreen extends StatefulWidget {
   const ExperienceEducationScreen({super.key});
@@ -9,160 +12,390 @@ class ExperienceEducationScreen extends StatefulWidget {
 }
 
 class _ExperienceEducationScreenState extends State<ExperienceEducationScreen> {
-  /// ==============================
-  /// Couleurs principales
-  /// ==============================
   static const Color primaryBlue = Color(0xFF1E6CFF);
   static const Color backgroundTop = Color(0xFF08162D);
   static const Color backgroundBottom = Color(0xFF050A12);
   static const Color cardColor = Color(0xFF121C31);
 
-  /// ==============================
-  /// Etat loading du bouton save
-  /// ==============================
+  static const String baseUrl = 'http://192.168.100.47:5000/api';
+
+  bool isLoading = true;
   bool isSaving = false;
+  String? errorMessage;
 
-  /// ==============================
-  /// Liste des expériences
-  /// Chaque expérience contient ses propres controllers
-  /// Plus tard: viendra du backend
-  /// ==============================
-  final List<Map<String, TextEditingController>> experiences = [
-    {
-      "role": TextEditingController(text: "UI/UX Designer"),
-      "company": TextEditingController(text: "Company name"),
-      "period": TextEditingController(text: "2023 - Present"),
-      "description": TextEditingController(
-        text: "Describe your role, missions and achievements.",
-      ),
-    },
-  ];
-
-  /// ==============================
-  /// Liste des éducations
-  /// Chaque éducation contient ses propres controllers
-  /// Plus tard: viendra du backend
-  /// ==============================
-  final List<Map<String, TextEditingController>> educations = [
-    {
-      "degree": TextEditingController(text: "Master Degree"),
-      "school": TextEditingController(text: "University name"),
-      "period": TextEditingController(text: "2020 - 2022"),
-      "description": TextEditingController(
-        text: "Describe your studies, specialization or academic projects.",
-      ),
-    },
-  ];
+  List<Map<String, dynamic>> experiences = [];
+  List<Map<String, dynamic>> educations = [];
 
   @override
-  void dispose() {
-    /// Libérer les controllers des expériences
-    for (final exp in experiences) {
-      for (final controller in exp.values) {
-        controller.dispose();
-      }
-    }
-
-    /// Libérer les controllers des éducations
-    for (final edu in educations) {
-      for (final controller in edu.values) {
-        controller.dispose();
-      }
-    }
-
-    super.dispose();
+  void initState() {
+    super.initState();
+    loadExperienceAndEducation();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: backgroundBottom,
-      resizeToAvoidBottomInset: true,
-      body: Container(
-        width: double.infinity,
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [backgroundTop, backgroundBottom],
+  Future<String?> _getToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('token');
+  }
+
+  Future<void> loadExperienceAndEducation() async {
+    try {
+      setState(() {
+        isLoading = true;
+        errorMessage = null;
+      });
+
+      final token = await _getToken();
+
+      if (token == null || token.isEmpty) {
+        setState(() {
+          isLoading = false;
+          errorMessage = "Token introuvable. Veuillez vous reconnecter.";
+        });
+        return;
+      }
+
+      final expResponse = await http.get(
+        Uri.parse('$baseUrl/experience/me'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      final eduResponse = await http.get(
+        Uri.parse('$baseUrl/education/me'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (expResponse.statusCode == 200) {
+        final expData = jsonDecode(expResponse.body);
+        experiences = List<Map<String, dynamic>>.from(expData['experiences'] ?? []);
+      } else {
+        experiences = [];
+      }
+
+      if (eduResponse.statusCode == 200) {
+        final eduData = jsonDecode(eduResponse.body);
+        educations = List<Map<String, dynamic>>.from(eduData['education'] ?? []);
+      } else {
+        educations = [];
+      }
+
+      setState(() {
+        isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        isLoading = false;
+        errorMessage = "Erreur de connexion au serveur";
+      });
+    }
+  }
+
+  Future<void> _addExperience() async {
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (_) => const _ExperienceDialog(),
+    );
+
+    if (result == null) return;
+
+    try {
+      final token = await _getToken();
+      if (token == null || token.isEmpty) return;
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/experience'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode(result),
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (!mounted) return;
+
+      if (response.statusCode == 201) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(data['message'] ?? 'Experience ajoutée avec succès'),
           ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(18, 14, 18, 120),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildTopBar(context),
-
-                      const SizedBox(height: 24),
-
-                      _buildSectionHeaderWithAdd(
-                        title: "Experience",
-                        onAdd: _addExperience,
-                      ),
-
-                      const SizedBox(height: 14),
-
-                      ...List.generate(
-                        experiences.length,
-                        (index) => Padding(
-                          padding: const EdgeInsets.only(bottom: 16),
-                          child: _buildExperienceCard(index),
-                        ),
-                      ),
-
-                      const SizedBox(height: 24),
-
-                      _buildSectionHeaderWithAdd(
-                        title: "Education",
-                        onAdd: _addEducation,
-                      ),
-
-                      const SizedBox(height: 14),
-
-                      ...List.generate(
-                        educations.length,
-                        (index) => Padding(
-                          padding: const EdgeInsets.only(bottom: 16),
-                          child: _buildEducationCard(index),
-                        ),
-                      ),
-
-                      const SizedBox(height: 24),
-                    ],
-                  ),
-                ),
-              ),
-            ],
+        );
+        await loadExperienceAndEducation();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(data['message'] ?? 'Erreur lors de l’ajout'),
           ),
-        ),
-      ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Erreur de connexion au serveur")),
+      );
+    }
+  }
 
-      /// ==============================
-      /// Bouton fixe en bas
-      /// ==============================
-      bottomNavigationBar: Container(
-        color: backgroundBottom,
-        child: SafeArea(
-          top: false,
-          child: _buildBottomButton(),
-        ),
+  Future<void> _editExperience(Map<String, dynamic> item) async {
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (_) => _ExperienceDialog(
+        initialJobTitle: (item['job_title'] ?? '').toString(),
+        initialCompany: (item['company'] ?? '').toString(),
+        initialStartDate: _formatDateInput(item['start_date']),
+        initialEndDate: _formatDateInput(item['end_date']),
+        initialDescription: (item['description'] ?? '').toString(),
       ),
     );
+
+    if (result == null) return;
+
+    try {
+      final token = await _getToken();
+      if (token == null || token.isEmpty) return;
+
+      final response = await http.put(
+        Uri.parse('$baseUrl/experience/${item['id']}'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode(result),
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (!mounted) return;
+
+      if (response.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(data['message'] ?? 'Experience mise à jour avec succès'),
+          ),
+        );
+        await loadExperienceAndEducation();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(data['message'] ?? 'Erreur lors de la mise à jour'),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Erreur de connexion au serveur")),
+      );
+    }
   }
 
-  /// ==============================
-  /// Barre supérieure
-  /// ==============================
+  Future<void> _deleteExperience(int id) async {
+    try {
+      final token = await _getToken();
+      if (token == null || token.isEmpty) return;
+
+      final response = await http.delete(
+        Uri.parse('$baseUrl/experience/$id'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (!mounted) return;
+
+      if (response.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(data['message'] ?? 'Experience supprimée avec succès'),
+          ),
+        );
+        await loadExperienceAndEducation();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(data['message'] ?? 'Erreur lors de la suppression'),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Erreur de connexion au serveur")),
+      );
+    }
+  }
+
+  Future<void> _addEducation() async {
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (_) => const _EducationDialog(),
+    );
+
+    if (result == null) return;
+
+    try {
+      final token = await _getToken();
+      if (token == null || token.isEmpty) return;
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/education'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode(result),
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (!mounted) return;
+
+      if (response.statusCode == 201) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(data['message'] ?? 'Education ajoutée avec succès'),
+          ),
+        );
+        await loadExperienceAndEducation();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(data['message'] ?? 'Erreur lors de l’ajout'),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Erreur de connexion au serveur")),
+      );
+    }
+  }
+
+  Future<void> _editEducation(Map<String, dynamic> item) async {
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (_) => _EducationDialog(
+        initialSchool: (item['school'] ?? '').toString(),
+        initialDegree: (item['degree'] ?? '').toString(),
+        initialField: (item['field'] ?? '').toString(),
+        initialStartDate: _formatDateInput(item['start_date']),
+        initialEndDate: _formatDateInput(item['end_date']),
+      ),
+    );
+
+    if (result == null) return;
+
+    try {
+      final token = await _getToken();
+      if (token == null || token.isEmpty) return;
+
+      final response = await http.put(
+        Uri.parse('$baseUrl/education/${item['id']}'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode(result),
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (!mounted) return;
+
+      if (response.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(data['message'] ?? 'Education mise à jour avec succès'),
+          ),
+        );
+        await loadExperienceAndEducation();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(data['message'] ?? 'Erreur lors de la mise à jour'),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Erreur de connexion au serveur")),
+      );
+    }
+  }
+
+  Future<void> _deleteEducation(int id) async {
+    try {
+      final token = await _getToken();
+      if (token == null || token.isEmpty) return;
+
+      final response = await http.delete(
+        Uri.parse('$baseUrl/education/$id'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (!mounted) return;
+
+      if (response.statusCode == 200) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(data['message'] ?? 'Education supprimée avec succès'),
+          ),
+        );
+        await loadExperienceAndEducation();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(data['message'] ?? 'Erreur lors de la suppression'),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Erreur de connexion au serveur")),
+      );
+    }
+  }
+
+  String _formatDateInput(dynamic value) {
+    if (value == null) return '';
+    final raw = value.toString();
+    if (raw.length >= 10) {
+      return raw.substring(0, 10);
+    }
+    return raw;
+  }
+
+  String _formatDateDisplay(dynamic value) {
+    if (value == null || value.toString().isEmpty) return 'Present';
+    final raw = value.toString();
+    if (raw.length >= 10) {
+      return raw.substring(0, 10);
+    }
+    return raw;
+  }
+
   Widget _buildTopBar(BuildContext context) {
     return Row(
       children: [
         GestureDetector(
-          onTap: () => Navigator.pop(context),
+          onTap: () => Navigator.pop(context, true),
           child: Container(
             width: 48,
             height: 48,
@@ -193,9 +426,6 @@ class _ExperienceEducationScreenState extends State<ExperienceEducationScreen> {
     );
   }
 
-  /// ==============================
-  /// Header section avec bouton Add
-  /// ==============================
   Widget _buildSectionHeaderWithAdd({
     required String title,
     required VoidCallback onAdd,
@@ -243,12 +473,7 @@ class _ExperienceEducationScreenState extends State<ExperienceEducationScreen> {
     );
   }
 
-  /// ==============================
-  /// Carte expérience
-  /// ==============================
-  Widget _buildExperienceCard(int index) {
-    final item = experiences[index];
-
+  Widget _buildExperienceCard(Map<String, dynamic> item) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
@@ -258,6 +483,7 @@ class _ExperienceEducationScreenState extends State<ExperienceEducationScreen> {
         border: Border.all(color: Colors.white.withOpacity(0.04)),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
@@ -272,7 +498,23 @@ class _ExperienceEducationScreenState extends State<ExperienceEducationScreen> {
                 ),
               ),
               GestureDetector(
-                onTap: () => _removeExperience(index),
+                onTap: () => _editExperience(item),
+                child: Container(
+                  width: 42,
+                  height: 42,
+                  margin: const EdgeInsets.only(right: 8),
+                  decoration: BoxDecoration(
+                    color: primaryBlue.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(
+                    Icons.edit_outlined,
+                    color: primaryBlue,
+                  ),
+                ),
+              ),
+              GestureDetector(
+                onTap: () => _deleteExperience(item['id'] as int),
                 child: Container(
                   width: 42,
                   height: 42,
@@ -288,52 +530,23 @@ class _ExperienceEducationScreenState extends State<ExperienceEducationScreen> {
               ),
             ],
           ),
-
           const SizedBox(height: 16),
-
-          _buildInputField(
-            label: "Role / Position",
-            hint: "Enter your role",
-            controller: item["role"]!,
-            icon: Icons.work_outline_rounded,
+          _buildInfoLine(Icons.work_outline_rounded, item['job_title'] ?? ''),
+          const SizedBox(height: 12),
+          _buildInfoLine(Icons.business_outlined, item['company'] ?? ''),
+          const SizedBox(height: 12),
+          _buildInfoLine(
+            Icons.calendar_month_outlined,
+            "${_formatDateDisplay(item['start_date'])} - ${_formatDateDisplay(item['end_date'])}",
           ),
-
-          const SizedBox(height: 14),
-
-          _buildInputField(
-            label: "Company",
-            hint: "Enter company name",
-            controller: item["company"]!,
-            icon: Icons.business_outlined,
-          ),
-
-          const SizedBox(height: 14),
-
-          _buildInputField(
-            label: "Period",
-            hint: "Ex: 2022 - 2024",
-            controller: item["period"]!,
-            icon: Icons.calendar_month_outlined,
-          ),
-
-          const SizedBox(height: 14),
-
-          _buildMultilineField(
-            label: "Description",
-            hint: "Describe your missions and achievements",
-            controller: item["description"]!,
-          ),
+          const SizedBox(height: 12),
+          _buildDescription(item['description'] ?? ''),
         ],
       ),
     );
   }
 
-  /// ==============================
-  /// Carte éducation
-  /// ==============================
-  Widget _buildEducationCard(int index) {
-    final item = educations[index];
-
+  Widget _buildEducationCard(Map<String, dynamic> item) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
@@ -343,6 +556,7 @@ class _ExperienceEducationScreenState extends State<ExperienceEducationScreen> {
         border: Border.all(color: Colors.white.withOpacity(0.04)),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
@@ -357,7 +571,23 @@ class _ExperienceEducationScreenState extends State<ExperienceEducationScreen> {
                 ),
               ),
               GestureDetector(
-                onTap: () => _removeEducation(index),
+                onTap: () => _editEducation(item),
+                child: Container(
+                  width: 42,
+                  height: 42,
+                  margin: const EdgeInsets.only(right: 8),
+                  decoration: BoxDecoration(
+                    color: primaryBlue.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(
+                    Icons.edit_outlined,
+                    color: primaryBlue,
+                  ),
+                ),
+              ),
+              GestureDetector(
+                onTap: () => _deleteEducation(item['id'] as int),
                 child: Container(
                   width: 42,
                   height: 42,
@@ -373,103 +603,38 @@ class _ExperienceEducationScreenState extends State<ExperienceEducationScreen> {
               ),
             ],
           ),
-
           const SizedBox(height: 16),
-
-          _buildInputField(
-            label: "Degree / Diploma",
-            hint: "Enter your degree",
-            controller: item["degree"]!,
-            icon: Icons.school_outlined,
-          ),
-
-          const SizedBox(height: 14),
-
-          _buildInputField(
-            label: "School / University",
-            hint: "Enter school name",
-            controller: item["school"]!,
-            icon: Icons.account_balance_outlined,
-          ),
-
-          const SizedBox(height: 14),
-
-          _buildInputField(
-            label: "Period",
-            hint: "Ex: 2020 - 2022",
-            controller: item["period"]!,
-            icon: Icons.calendar_month_outlined,
-          ),
-
-          const SizedBox(height: 14),
-
-          _buildMultilineField(
-            label: "Description",
-            hint: "Describe your studies or academic projects",
-            controller: item["description"]!,
+          _buildInfoLine(Icons.school_outlined, item['degree'] ?? ''),
+          const SizedBox(height: 12),
+          _buildInfoLine(Icons.account_balance_outlined, item['school'] ?? ''),
+          const SizedBox(height: 12),
+          _buildInfoLine(Icons.menu_book_outlined, item['field'] ?? ''),
+          const SizedBox(height: 12),
+          _buildInfoLine(
+            Icons.calendar_month_outlined,
+            "${_formatDateDisplay(item['start_date'])} - ${_formatDateDisplay(item['end_date'])}",
           ),
         ],
       ),
     );
   }
 
-  /// ==============================
-  /// Input simple réutilisable
-  /// ==============================
-  Widget _buildInputField({
-    required String label,
-    required String hint,
-    required TextEditingController controller,
-    required IconData icon,
-  }) {
-    return Column(
+  Widget _buildInfoLine(IconData icon, String text) {
+    return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: TextStyle(
-            color: Colors.white.withOpacity(0.65),
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-          ),
+        Icon(
+          icon,
+          color: Colors.white.withOpacity(0.55),
+          size: 20,
         ),
-        const SizedBox(height: 10),
-        TextField(
-          controller: controller,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 15,
-          ),
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: TextStyle(
-              color: Colors.white.withOpacity(0.30),
-            ),
-            prefixIcon: Icon(
-              icon,
-              color: Colors.white.withOpacity(0.45),
-            ),
-            filled: true,
-            fillColor: Colors.white.withOpacity(0.05),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 16,
-            ),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
-              borderSide: BorderSide(
-                color: Colors.white.withOpacity(0.04),
-              ),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
-              borderSide: BorderSide(
-                color: Colors.white.withOpacity(0.04),
-              ),
-            ),
-            focusedBorder: const OutlineInputBorder(
-              borderRadius: BorderRadius.all(Radius.circular(18)),
-              borderSide: BorderSide(color: primaryBlue, width: 1.4),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            text,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 15,
             ),
           ),
         ),
@@ -477,67 +642,25 @@ class _ExperienceEducationScreenState extends State<ExperienceEducationScreen> {
     );
   }
 
-  /// ==============================
-  /// Input multiline réutilisable
-  /// ==============================
-  Widget _buildMultilineField({
-    required String label,
-    required String hint,
-    required TextEditingController controller,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            color: Colors.white.withOpacity(0.65),
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-          ),
+  Widget _buildDescription(String text) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: Colors.white.withOpacity(0.78),
+          fontSize: 14,
+          height: 1.5,
         ),
-        const SizedBox(height: 10),
-        TextField(
-          controller: controller,
-          maxLines: 5,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 15,
-            height: 1.5,
-          ),
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: TextStyle(
-              color: Colors.white.withOpacity(0.30),
-            ),
-            filled: true,
-            fillColor: Colors.white.withOpacity(0.05),
-            contentPadding: const EdgeInsets.all(16),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
-              borderSide: BorderSide(
-                color: Colors.white.withOpacity(0.04),
-              ),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(18),
-              borderSide: BorderSide(
-                color: Colors.white.withOpacity(0.04),
-              ),
-            ),
-            focusedBorder: const OutlineInputBorder(
-              borderRadius: BorderRadius.all(Radius.circular(18)),
-              borderSide: BorderSide(color: primaryBlue, width: 1.4),
-            ),
-          ),
-        ),
-      ],
+      ),
     );
   }
 
-  /// ==============================
-  /// Bouton save
-  /// ==============================
   Widget _buildBottomButton() {
     return Container(
       color: backgroundBottom,
@@ -545,7 +668,11 @@ class _ExperienceEducationScreenState extends State<ExperienceEducationScreen> {
       child: SizedBox(
         height: 58,
         child: ElevatedButton(
-          onPressed: isSaving ? null : _saveExperienceEducation,
+          onPressed: isSaving
+              ? null
+              : () {
+                  Navigator.pop(context, true);
+                },
           style: ElevatedButton.styleFrom(
             backgroundColor: primaryBlue,
             foregroundColor: Colors.white,
@@ -565,7 +692,7 @@ class _ExperienceEducationScreenState extends State<ExperienceEducationScreen> {
                   ),
                 )
               : const Text(
-                  "Save Changes",
+                  "Done",
                   style: TextStyle(
                     fontSize: 17,
                     fontWeight: FontWeight.w800,
@@ -576,85 +703,501 @@ class _ExperienceEducationScreenState extends State<ExperienceEducationScreen> {
     );
   }
 
-  /// ==============================
-  /// Ajouter une expérience
-  /// ==============================
-  void _addExperience() {
-    setState(() {
-      experiences.add({
-        "role": TextEditingController(),
-        "company": TextEditingController(),
-        "period": TextEditingController(),
-        "description": TextEditingController(),
-      });
-    });
-  }
+  @override
+  Widget build(BuildContext context) {
+    if (isLoading) {
+      return const Scaffold(
+        backgroundColor: backgroundBottom,
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
 
-  /// ==============================
-  /// Supprimer une expérience
-  /// ==============================
-  void _removeExperience(int index) {
-    if (experiences.length == 1) return;
+    if (errorMessage != null) {
+      return Scaffold(
+        backgroundColor: backgroundBottom,
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  errorMessage!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                ElevatedButton(
+                  onPressed: loadExperienceAndEducation,
+                  child: const Text("Réessayer"),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
 
-    setState(() {
-      for (final controller in experiences[index].values) {
-        controller.dispose();
-      }
-      experiences.removeAt(index);
-    });
-  }
-
-  /// ==============================
-  /// Ajouter une éducation
-  /// ==============================
-  void _addEducation() {
-    setState(() {
-      educations.add({
-        "degree": TextEditingController(),
-        "school": TextEditingController(),
-        "period": TextEditingController(),
-        "description": TextEditingController(),
-      });
-    });
-  }
-
-  /// ==============================
-  /// Supprimer une éducation
-  /// ==============================
-  void _removeEducation(int index) {
-    if (educations.length == 1) return;
-
-    setState(() {
-      for (final controller in educations[index].values) {
-        controller.dispose();
-      }
-      educations.removeAt(index);
-    });
-  }
-
-  /// ==============================
-  /// Save temporaire
-  /// Plus tard: appel backend
-  /// ==============================
-  void _saveExperienceEducation() async {
-    setState(() {
-      isSaving = true;
-    });
-
-    await Future.delayed(const Duration(seconds: 1));
-
-    if (!mounted) return;
-
-    setState(() {
-      isSaving = false;
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text("Experience and education updated successfully"),
+    return Scaffold(
+      backgroundColor: backgroundBottom,
+      resizeToAvoidBottomInset: true,
+      body: Container(
+        width: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [backgroundTop, backgroundBottom],
+          ),
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(18, 14, 18, 120),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildTopBar(context),
+                      const SizedBox(height: 24),
+                      _buildSectionHeaderWithAdd(
+                        title: "Experience",
+                        onAdd: _addExperience,
+                      ),
+                      const SizedBox(height: 14),
+                      if (experiences.isEmpty)
+                        _buildEmptyCard("No experience added yet"),
+                      ...experiences.map(
+                        (item) => Padding(
+                          padding: const EdgeInsets.only(bottom: 16),
+                          child: _buildExperienceCard(item),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      _buildSectionHeaderWithAdd(
+                        title: "Education",
+                        onAdd: _addEducation,
+                      ),
+                      const SizedBox(height: 14),
+                      if (educations.isEmpty)
+                        _buildEmptyCard("No education added yet"),
+                      ...educations.map(
+                        (item) => Padding(
+                          padding: const EdgeInsets.only(bottom: 16),
+                          child: _buildEducationCard(item),
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      bottomNavigationBar: Container(
+        color: backgroundBottom,
+        child: SafeArea(
+          top: false,
+          child: _buildBottomButton(),
+        ),
       ),
     );
+  }
 
-    Navigator.pop(context);
+  Widget _buildEmptyCard(String text) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withOpacity(0.04)),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: Colors.white.withOpacity(0.65),
+          fontSize: 14,
+        ),
+      ),
+    );
+  }
+}
+
+class _ExperienceDialog extends StatefulWidget {
+  final String initialJobTitle;
+  final String initialCompany;
+  final String initialStartDate;
+  final String initialEndDate;
+  final String initialDescription;
+
+  const _ExperienceDialog({
+    this.initialJobTitle = '',
+    this.initialCompany = '',
+    this.initialStartDate = '',
+    this.initialEndDate = '',
+    this.initialDescription = '',
+  });
+
+  @override
+  State<_ExperienceDialog> createState() => _ExperienceDialogState();
+}
+
+class _ExperienceDialogState extends State<_ExperienceDialog> {
+  late final TextEditingController jobTitleController;
+  late final TextEditingController companyController;
+  late final TextEditingController startDateController;
+  late final TextEditingController endDateController;
+  late final TextEditingController descriptionController;
+
+
+  Future<void> _pickDate(TextEditingController controller) async {
+  final now = DateTime.now();
+
+  DateTime initialDate = now;
+  if (controller.text.trim().isNotEmpty) {
+    try {
+      initialDate = DateTime.parse(controller.text.trim());
+    } catch (_) {}
+  }
+
+  final picked = await showDatePicker(
+    context: context,
+    initialDate: initialDate,
+    firstDate: DateTime(1980),
+    lastDate: DateTime(2100),
+    builder: (context, child) {
+      return Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: const ColorScheme.dark(
+            primary: Color(0xFF1E6CFF),
+            surface: Color(0xFF121C31),
+          ),
+          dialogBackgroundColor: Color(0xFF121C31),
+        ),
+        child: child!,
+      );
+    },
+  );
+
+  if (picked != null) {
+    controller.text = picked.toIso8601String().substring(0, 10);
+    setState(() {});
+  }
+}
+
+  @override
+  void initState() {
+    super.initState();
+    jobTitleController = TextEditingController(text: widget.initialJobTitle);
+    companyController = TextEditingController(text: widget.initialCompany);
+    startDateController = TextEditingController(text: widget.initialStartDate);
+    endDateController = TextEditingController(text: widget.initialEndDate);
+    descriptionController =
+        TextEditingController(text: widget.initialDescription);
+  }
+
+  @override
+  void dispose() {
+    jobTitleController.dispose();
+    companyController.dispose();
+    startDateController.dispose();
+    endDateController.dispose();
+    descriptionController.dispose();
+    super.dispose();
+  }
+
+  @override
+ Widget build(BuildContext context) {
+  return AlertDialog(
+    backgroundColor: const Color(0xFF121C31),
+    title: const Text(
+      "Experience",
+      style: TextStyle(color: Colors.white),
+    ),
+    content: SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _dialogInput(jobTitleController, "Job title"),
+          const SizedBox(height: 12),
+          _dialogInput(companyController, "Company"),
+          const SizedBox(height: 12),
+          _dialogDateInput(
+            startDateController,
+            "Start date",
+            () => _pickDate(startDateController),
+          ),
+          const SizedBox(height: 12),
+          _dialogDateInput(
+            endDateController,
+            "End date",
+            () => _pickDate(endDateController),
+          ),
+          const SizedBox(height: 12),
+          _dialogInput(descriptionController, "Description", maxLines: 4),
+        ],
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text("Cancel"),
+      ),
+      ElevatedButton(
+        onPressed: () {
+          Navigator.pop(context, {
+            'job_title': jobTitleController.text.trim(),
+            'company': companyController.text.trim(),
+            'start_date': startDateController.text.trim(),
+            'end_date': endDateController.text.trim(),
+            'description': descriptionController.text.trim(),
+          });
+        },
+        child: const Text("Save"),
+      ),
+    ],
+  );
+}
+
+    Widget _dialogDateInput(
+  TextEditingController controller,
+  String hint,
+  VoidCallback onTap,
+) {
+  return TextField(
+    controller: controller,
+    readOnly: true,
+    onTap: onTap,
+    style: const TextStyle(color: Colors.white),
+    decoration: InputDecoration(
+      hintText: hint,
+      hintStyle: TextStyle(color: Colors.white.withOpacity(0.35)),
+      suffixIcon: const Icon(
+        Icons.calendar_month_outlined,
+        color: Colors.white70,
+      ),
+      filled: true,
+      fillColor: Colors.white.withOpacity(0.05),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide.none,
+      ),
+    ),
+  );
+}
+
+  Widget _dialogInput(
+    TextEditingController controller,
+    String hint, {
+    int maxLines = 1,
+  }) {
+    return TextField(
+      controller: controller,
+      maxLines: maxLines,
+      style: const TextStyle(color: Colors.white),
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: TextStyle(color: Colors.white.withOpacity(0.35)),
+        filled: true,
+        fillColor: Colors.white.withOpacity(0.05),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide.none,
+        ),
+      ),
+    );
+  }
+}
+
+class _EducationDialog extends StatefulWidget {
+  final String initialSchool;
+  final String initialDegree;
+  final String initialField;
+  final String initialStartDate;
+  final String initialEndDate;
+
+  const _EducationDialog({
+    this.initialSchool = '',
+    this.initialDegree = '',
+    this.initialField = '',
+    this.initialStartDate = '',
+    this.initialEndDate = '',
+  });
+
+  @override
+  State<_EducationDialog> createState() => _EducationDialogState();
+}
+
+class _EducationDialogState extends State<_EducationDialog> {
+  late final TextEditingController schoolController;
+  late final TextEditingController degreeController;
+  late final TextEditingController fieldController;
+  late final TextEditingController startDateController;
+  late final TextEditingController endDateController;
+
+   Future<void> _pickDate(TextEditingController controller) async {
+  final now = DateTime.now();
+
+  DateTime initialDate = now;
+  if (controller.text.trim().isNotEmpty) {
+    try {
+      initialDate = DateTime.parse(controller.text.trim());
+    } catch (_) {}
+  }
+
+  final picked = await showDatePicker(
+    context: context,
+    initialDate: initialDate,
+    firstDate: DateTime(1980),
+    lastDate: DateTime(2100),
+    builder: (context, child) {
+      return Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: const ColorScheme.dark(
+            primary: Color(0xFF1E6CFF),
+            surface: Color(0xFF121C31),
+          ),
+          dialogBackgroundColor: Color(0xFF121C31),
+        ),
+        child: child!,
+      );
+    },
+  );
+
+  if (picked != null) {
+    controller.text = picked.toIso8601String().substring(0, 10);
+    setState(() {});
+  }
+}
+
+  @override
+  void initState() {
+    super.initState();
+    schoolController = TextEditingController(text: widget.initialSchool);
+    degreeController = TextEditingController(text: widget.initialDegree);
+    fieldController = TextEditingController(text: widget.initialField);
+    startDateController = TextEditingController(text: widget.initialStartDate);
+    endDateController = TextEditingController(text: widget.initialEndDate);
+  }
+
+  @override
+  void dispose() {
+    schoolController.dispose();
+    degreeController.dispose();
+    fieldController.dispose();
+    startDateController.dispose();
+    endDateController.dispose();
+    super.dispose();
+  }
+
+  @override
+ Widget build(BuildContext context) {
+  return AlertDialog(
+    backgroundColor: const Color(0xFF121C31),
+    title: const Text(
+      "Education",
+      style: TextStyle(color: Colors.white),
+    ),
+    content: SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _dialogInput(schoolController, "School"),
+          const SizedBox(height: 12),
+          _dialogInput(degreeController, "Degree"),
+          const SizedBox(height: 12),
+          _dialogInput(fieldController, "Field"),
+          const SizedBox(height: 12),
+          _dialogDateInput(
+            startDateController,
+            "Start date",
+            () => _pickDate(startDateController),
+          ),
+          const SizedBox(height: 12),
+          _dialogDateInput(
+            endDateController,
+            "End date",
+            () => _pickDate(endDateController),
+          ),
+        ],
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text("Cancel"),
+      ),
+      ElevatedButton(
+        onPressed: () {
+          Navigator.pop(context, {
+            'school': schoolController.text.trim(),
+            'degree': degreeController.text.trim(),
+            'field': fieldController.text.trim(),
+            'start_date': startDateController.text.trim(),
+            'end_date': endDateController.text.trim(),
+          });
+        },
+        child: const Text("Save"),
+      ),
+    ],
+  );
+}
+
+ Widget _dialogDateInput(
+  TextEditingController controller,
+  String hint,
+  VoidCallback onTap,
+) {
+  return TextField(
+    controller: controller,
+    readOnly: true,
+    onTap: onTap,
+    style: const TextStyle(color: Colors.white),
+    decoration: InputDecoration(
+      hintText: hint,
+      hintStyle: TextStyle(color: Colors.white.withOpacity(0.35)),
+      suffixIcon: const Icon(
+        Icons.calendar_month_outlined,
+        color: Colors.white70,
+      ),
+      filled: true,
+      fillColor: Colors.white.withOpacity(0.05),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide.none,
+      ),
+    ),
+  );
+}
+
+  Widget _dialogInput(
+    TextEditingController controller,
+    String hint, {
+    int maxLines = 1,
+  }) {
+    return TextField(
+      controller: controller,
+      maxLines: maxLines,
+      style: const TextStyle(color: Colors.white),
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: TextStyle(color: Colors.white.withOpacity(0.35)),
+        filled: true,
+        fillColor: Colors.white.withOpacity(0.05),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide.none,
+        ),
+      ),
+    );
   }
 }

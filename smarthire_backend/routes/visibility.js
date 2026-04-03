@@ -31,7 +31,7 @@ router.post("/", protect, authorize("candidate"), async (req, res) => {
   try {
     const { visibility } = req.body;
 
-    if (!["public", "private", "selective"].includes(visibility)) {
+    if (!["public", "private"].includes(visibility)) {
       return res.status(400).json({ message: "Valeur de visibilité invalide" });
     }
 
@@ -63,7 +63,7 @@ router.put("/", protect, authorize("candidate"), async (req, res) => {
   try {
     const { visibility } = req.body;
 
-    if (!["public", "private", "selective"].includes(visibility)) {
+    if (!["public", "private"].includes(visibility)) {
       return res.status(400).json({ message: "Valeur de visibilité invalide" });
     }
 

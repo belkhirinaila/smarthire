@@ -1,4 +1,7 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 class CandidateHomeScreen extends StatefulWidget {
   const CandidateHomeScreen({super.key});
@@ -14,71 +17,193 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
   static const Color cardColor = Color(0xFF121C31);
   static const Color chipColor = Color(0xFF18233A);
 
+  static const String baseUrl = 'http://192.168.100.47:5000/api';
+
+  List<dynamic> allJobs = [];
+  List<dynamic> filteredJobs = [];
+
+  bool isLoading = true;
+  String? errorMessage;
+
   final TextEditingController searchController = TextEditingController();
   int selectedFilterIndex = 0;
+  int unreadNotificationsCount = 0;
 
   final String userName = "Candidate";
   final String userSubtitle = "Find your next role";
-
-  final List<Map<String, dynamic>> recommendedJobs = [
-    {
-      "title": "Job title",
-      "company": "Company name",
-      "location": "Location",
-      "type": "FULL-TIME",
-      "tag": "TOP MATCH",
-      "salary": "Salary",
-      "time": "Recently",
-      "logo": null,
-    },
-    {
-      "title": "Job title",
-      "company": "Company name",
-      "location": "Location",
-      "type": "REMOTE",
-      "tag": "NEW",
-      "salary": "Salary",
-      "time": "Recently",
-      "logo": null,
-    },
-  ];
-
-  final List<Map<String, dynamic>> recentJobs = [
-    {
-      "title": "Job title",
-      "company": "Company name",
-      "location": "Location",
-      "type": "FULL-TIME",
-      "salary": "Salary",
-      "time": "Recently",
-      "logo": null,
-    },
-    {
-      "title": "Job title",
-      "company": "Company name",
-      "location": "Location",
-      "type": "ON-SITE",
-      "salary": "Salary",
-      "time": "Recently",
-      "logo": null,
-    },
-    {
-      "title": "Job title",
-      "company": "Company name",
-      "location": "Location",
-      "type": "FREELANCE",
-      "salary": "Salary",
-      "time": "Recently",
-      "logo": null,
-    },
-  ];
 
   final List<String> filters = [
     "All Jobs",
     "Remote",
     "Full-time",
+    "Part-time",
+    "Internship",
     "Design",
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    fetchJobs();
+    fetchUnreadNotificationsCount();
+  }
+
+  Future<void> fetchJobs() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/jobs'),
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        allJobs = data['jobs'] ?? [];
+        filteredJobs = List.from(allJobs);
+
+        setState(() {
+          isLoading = false;
+          errorMessage = null;
+        });
+      } else {
+        setState(() {
+          isLoading = false;
+          errorMessage = data['message'] ?? 'Erreur lors du chargement des jobs';
+        });
+      }
+    } catch (e) {
+      setState(() {
+        isLoading = false;
+        errorMessage = 'Impossible de charger les jobs';
+      });
+    }
+  }
+
+  Future<void> fetchUnreadNotificationsCount() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token');
+
+      if (token == null || token.isEmpty) return;
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/notifications/me'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final List<dynamic> notifications = data['notifications'] ?? [];
+
+        final unread = notifications.where((item) {
+          final value = item['is_read'];
+          return value == false || value == 0 || value == null;
+        }).length;
+
+        setState(() {
+          unreadNotificationsCount = unread;
+        });
+      }
+    } catch (_) {}
+  }
+
+  void applyFilter(int index) {
+    final selected = filters[index].toLowerCase();
+
+    List<dynamic> result = List.from(allJobs);
+
+    if (selected == "remote") {
+      result = allJobs.where((job) {
+        return (job['work_mode'] ?? '').toString().toLowerCase() == 'remote';
+      }).toList();
+    } else if (selected == "full-time") {
+      result = allJobs.where((job) {
+        return (job['type'] ?? '').toString().toLowerCase() == 'full-time';
+      }).toList();
+    } else if (selected == "part-time") {
+      result = allJobs.where((job) {
+        return (job['type'] ?? '').toString().toLowerCase() == 'part-time';
+      }).toList();
+    } else if (selected == "internship") {
+      result = allJobs.where((job) {
+        return (job['type'] ?? '').toString().toLowerCase() == 'internship';
+      }).toList();
+    } else if (selected == "design") {
+      result = allJobs.where((job) {
+        return (job['category'] ?? '').toString().toLowerCase() == 'design';
+      }).toList();
+    }
+
+    final query = searchController.text.trim().toLowerCase();
+
+    if (query.isNotEmpty) {
+      result = result.where((job) {
+        final title = (job['title'] ?? '').toString().toLowerCase();
+        final company = (job['company_name'] ?? '').toString().toLowerCase();
+        final location = (job['location'] ?? '').toString().toLowerCase();
+        final category = (job['category'] ?? '').toString().toLowerCase();
+
+        return title.contains(query) ||
+            company.contains(query) ||
+            location.contains(query) ||
+            category.contains(query);
+      }).toList();
+    }
+
+    setState(() {
+      selectedFilterIndex = index;
+      filteredJobs = result;
+    });
+  }
+
+  void applySearch(String query) {
+    final lowerQuery = query.toLowerCase().trim();
+    final selected = filters[selectedFilterIndex].toLowerCase();
+
+    List<dynamic> result = List.from(allJobs);
+
+    if (selected == "remote") {
+      result = allJobs.where((job) {
+        return (job['work_mode'] ?? '').toString().toLowerCase() == 'remote';
+      }).toList();
+    } else if (selected == "full-time") {
+      result = allJobs.where((job) {
+        return (job['type'] ?? '').toString().toLowerCase() == 'full-time';
+      }).toList();
+    } else if (selected == "part-time") {
+      result = allJobs.where((job) {
+        return (job['type'] ?? '').toString().toLowerCase() == 'part-time';
+      }).toList();
+    } else if (selected == "internship") {
+      result = allJobs.where((job) {
+        return (job['type'] ?? '').toString().toLowerCase() == 'internship';
+      }).toList();
+    } else if (selected == "design") {
+      result = allJobs.where((job) {
+        return (job['category'] ?? '').toString().toLowerCase() == 'design';
+      }).toList();
+    }
+
+    if (lowerQuery.isNotEmpty) {
+      result = result.where((job) {
+        final title = (job['title'] ?? '').toString().toLowerCase();
+        final company = (job['company_name'] ?? '').toString().toLowerCase();
+        final location = (job['location'] ?? '').toString().toLowerCase();
+        final category = (job['category'] ?? '').toString().toLowerCase();
+
+        return title.contains(lowerQuery) ||
+            company.contains(lowerQuery) ||
+            location.contains(lowerQuery) ||
+            category.contains(lowerQuery);
+      }).toList();
+    }
+
+    setState(() {
+      filteredJobs = result;
+    });
+  }
 
   @override
   void dispose() {
@@ -94,11 +219,31 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
     );
   }
 
+  Future<void> openNotifications() async {
+    final result = await Navigator.pushNamed(context, '/notifications');
+
+    if (result == true) {
+      await fetchUnreadNotificationsCount();
+    }
+  }
+
   void openJobDetails(Map<String, dynamic> job) {
     Navigator.pushNamed(
       context,
       '/job-details',
-      arguments: job,
+      arguments: {
+        'id': job['id'],
+        'title': job['title'],
+        'company': job['company_name'],
+        'company_name': job['company_name'],
+        'location': job['location'],
+        'salary': job['salary']?.toString() ?? '',
+        'type': job['type'] ?? 'Not specified',
+        'work_mode': job['work_mode'] ?? 'Not specified',
+        'category': job['category'] ?? 'General',
+        'description': job['description'] ?? 'No description available',
+        'requirements': job['requirements'] ?? [],
+      },
     );
   }
 
@@ -131,28 +276,180 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                       _buildFilters(),
                       const SizedBox(height: 28),
                       _buildSectionHeader(
-                        title: "Recommended for You",
-                        onSeeAll: () {},
+                        title: "Available Jobs",
+                        onSeeAll: () {
+                          searchController.clear();
+                          applyFilter(0);
+                        },
                       ),
                       const SizedBox(height: 16),
-                      _buildRecommendedJobs(),
-                      const SizedBox(height: 30),
-                      const Text(
-                        "Recent Jobs",
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 17,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      _buildRecentJobs(),
+                      _buildJobsContent(),
                     ],
                   ),
                 ),
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildJobsContent() {
+    if (isLoading) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.only(top: 40),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (errorMessage != null) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(22),
+        decoration: BoxDecoration(
+          color: cardColor,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: Colors.white.withOpacity(0.04)),
+        ),
+        child: Column(
+          children: [
+            Text(
+              errorMessage!,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.75),
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(height: 12),
+            ElevatedButton(
+              onPressed: () {
+                setState(() {
+                  isLoading = true;
+                  errorMessage = null;
+                });
+                fetchJobs();
+              },
+              child: const Text('Réessayer'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (filteredJobs.isEmpty) {
+      return _buildEmptyState("No jobs available for this category");
+    }
+
+    return Column(
+      children: filteredJobs.map((job) {
+        final String type = (job["type"] ?? "").toString();
+        final String workMode = (job["work_mode"] ?? "").toString();
+        final String category = (job["category"] ?? "").toString();
+
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 14),
+          child: GestureDetector(
+            onTap: () => openJobDetails(job),
+            child: Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: cardColor,
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(color: Colors.white.withOpacity(0.04)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 58,
+                    height: 58,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.06),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: const Icon(
+                      Icons.business_center_rounded,
+                      color: Colors.white54,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          job["title"] ?? "",
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 17,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          "${job["company_name"] ?? ""} • ${job["location"] ?? ""}",
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.55),
+                            fontSize: 14,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          job["salary"]?.toString() ?? "",
+                          style: const TextStyle(
+                            color: primaryBlue,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            if (type.isNotEmpty) _buildTag(type),
+                            if (workMode.isNotEmpty) _buildTag(workMode),
+                            if (category.isNotEmpty) _buildTag(category),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    color: Colors.white.withOpacity(0.65),
+                    size: 18,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildTag(String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );
@@ -202,35 +499,54 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
           ),
         ),
         const SizedBox(width: 12),
-        Container(
-          width: 50,
-          height: 50,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: Colors.white.withOpacity(0.06),
-            border: Border.all(color: Colors.white.withOpacity(0.06)),
-          ),
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              const Icon(
-                Icons.notifications_none_rounded,
-                color: Colors.white,
-                size: 25,
-              ),
-              Positioned(
-                top: 13,
-                right: 13,
-                child: Container(
-                  width: 8,
-                  height: 8,
-                  decoration: const BoxDecoration(
-                    color: Colors.redAccent,
-                    shape: BoxShape.circle,
-                  ),
+        GestureDetector(
+          onTap: openNotifications,
+          child: Container(
+            width: 50,
+            height: 50,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.white.withOpacity(0.06),
+              border: Border.all(color: Colors.white.withOpacity(0.06)),
+            ),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                const Icon(
+                  Icons.notifications_none_rounded,
+                  color: Colors.white,
+                  size: 25,
                 ),
-              ),
-            ],
+                if (unreadNotificationsCount > 0)
+                  Positioned(
+                    top: 10,
+                    right: 8,
+                    child: Container(
+                      constraints: const BoxConstraints(
+                        minWidth: 18,
+                        minHeight: 18,
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      decoration: const BoxDecoration(
+                        color: Colors.redAccent,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Center(
+                        child: Text(
+                          unreadNotificationsCount > 9
+                              ? '9+'
+                              : unreadNotificationsCount.toString(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ],
@@ -250,6 +566,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
             ),
             child: TextField(
               controller: searchController,
+              onChanged: applySearch,
               style: const TextStyle(color: Colors.white),
               decoration: InputDecoration(
                 border: InputBorder.none,
@@ -306,11 +623,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
           final bool isSelected = selectedFilterIndex == index;
 
           return GestureDetector(
-            onTap: () {
-              setState(() {
-                selectedFilterIndex = index;
-              });
-            },
+            onTap: () => applyFilter(index),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 18),
               decoration: BoxDecoration(
@@ -322,26 +635,16 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
                       : Colors.white.withOpacity(0.05),
                 ),
               ),
-              child: Row(
-                children: [
-                  Text(
-                    filters[index],
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight:
-                          isSelected ? FontWeight.w700 : FontWeight.w500,
-                    ),
+              child: Center(
+                child: Text(
+                  filters[index],
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight:
+                        isSelected ? FontWeight.w700 : FontWeight.w500,
                   ),
-                  if (index != 0) ...[
-                    const SizedBox(width: 6),
-                    Icon(
-                      Icons.keyboard_arrow_down_rounded,
-                      color: Colors.white.withOpacity(0.85),
-                      size: 18,
-                    ),
-                  ],
-                ],
+                ),
               ),
             ),
           );
@@ -377,268 +680,6 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildRecommendedJobs() {
-    if (recommendedJobs.isEmpty) {
-      return _buildEmptyState("No recommended jobs available yet");
-    }
-
-    return SizedBox(
-      height: 255,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: recommendedJobs.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 14),
-        itemBuilder: (context, index) {
-          final job = recommendedJobs[index];
-
-          return GestureDetector(
-            onTap: () => openJobDetails(job),
-            child: Container(
-              width: 290,
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                color: cardColor,
-                borderRadius: BorderRadius.circular(26),
-                border: Border.all(color: Colors.white.withOpacity(0.04)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 54,
-                        height: 54,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.06),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: const Icon(
-                          Icons.business_rounded,
-                          color: Colors.white54,
-                        ),
-                      ),
-                      const Spacer(),
-                      Icon(
-                        Icons.bookmark_border_rounded,
-                        color: Colors.white.withOpacity(0.75),
-                        size: 26,
-                      ),
-                    ],
-                  ),
-                  const Spacer(),
-                  Text(
-                    job["title"] ?? "",
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      height: 1.2,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    "${job["company"] ?? ""} • ${job["location"] ?? ""}",
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.55),
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      _buildTag(
-                        text: job["type"] ?? "",
-                        background: primaryBlue.withOpacity(0.16),
-                        textColor: primaryBlue,
-                      ),
-                      _buildTag(
-                        text: job["tag"] ?? "",
-                        background: const Color(0xFF0D3A2A),
-                        textColor: const Color(0xFF22C55E),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          job["salary"] ?? "",
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                      Text(
-                        job["time"] ?? "",
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.5),
-                          fontSize: 14,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildRecentJobs() {
-    if (recentJobs.isEmpty) {
-      return _buildEmptyState("No recent jobs available yet");
-    }
-
-    return Column(
-      children: recentJobs.map((job) {
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 14),
-          child: GestureDetector(
-            onTap: () => openJobDetails(job),
-            child: Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: cardColor,
-                borderRadius: BorderRadius.circular(22),
-                border: Border.all(color: Colors.white.withOpacity(0.04)),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 58,
-                    height: 58,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.06),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: const Icon(
-                      Icons.business_center_rounded,
-                      color: Colors.white54,
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          job["title"] ?? "",
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 17,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          "${job["company"] ?? ""} • ${job["location"] ?? ""}",
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.55),
-                            fontSize: 14,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Text(
-                              job["type"] ?? "",
-                              style: const TextStyle(
-                                color: primaryBlue,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Container(
-                              width: 4,
-                              height: 4,
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.35),
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                job["time"] ?? "",
-                                style: TextStyle(
-                                  color: Colors.white.withOpacity(0.45),
-                                  fontSize: 13,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Icon(
-                        Icons.more_horiz_rounded,
-                        color: Colors.white.withOpacity(0.65),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        job["salary"] ?? "",
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 17,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      }).toList(),
-    );
-  }
-
-  Widget _buildTag({
-    required String text,
-    required Color background,
-    required Color textColor,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          color: textColor,
-          fontSize: 12,
-          fontWeight: FontWeight.w800,
-        ),
-      ),
     );
   }
 

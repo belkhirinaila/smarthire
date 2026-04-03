@@ -1,4 +1,7 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 class DirectChatThreadScreen extends StatefulWidget {
   const DirectChatThreadScreen({super.key});
@@ -8,47 +11,28 @@ class DirectChatThreadScreen extends StatefulWidget {
 }
 
 class _DirectChatThreadScreenState extends State<DirectChatThreadScreen> {
-  /// ==============================
-  /// Couleurs principales
-  /// ==============================
   static const Color primaryBlue = Color(0xFF1E6CFF);
   static const Color backgroundTop = Color(0xFF08162D);
   static const Color backgroundBottom = Color(0xFF050A12);
   static const Color myMessageColor = Color(0xFF1E6CFF);
   static const Color otherMessageColor = Color(0xFF121C31);
 
-  /// ==============================
-  /// Contrôleur du champ message
-  /// ==============================
+  static const String baseUrl = 'http://192.168.100.47:5000/api';
+
   final TextEditingController messageController = TextEditingController();
 
-  /// ==============================
-  /// Liste temporaire des messages
-  /// Plus tard: viendra du backend
-  /// ==============================
-  late List<Map<String, dynamic>> messages;
+  List<dynamic> messages = [];
+  bool isLoading = true;
+  bool isSending = false;
+  String? errorMessage;
+  int? conversationId;
+  String company = "Recruiter";
+  String title = "Direct Chat";
 
   @override
   void initState() {
     super.initState();
-
-    messages = [
-      {
-        "text": "Hello! We reviewed your profile and we would like to discuss this opportunity with you.",
-        "isMe": false,
-        "time": "09:12",
-      },
-      {
-        "text": "Hello, thank you for reaching out. I’m interested in learning more.",
-        "isMe": true,
-        "time": "09:14",
-      },
-      {
-        "text": "Great. Are you available for a short interview this week?",
-        "isMe": false,
-        "time": "09:15",
-      },
-    ];
+    Future.microtask(() => initializeConversation());
   }
 
   @override
@@ -57,17 +41,192 @@ class _DirectChatThreadScreenState extends State<DirectChatThreadScreen> {
     super.dispose();
   }
 
+  Future<void> initializeConversation() async {
+    try {
+      final args =
+          ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+
+      company = args?['company'] ?? "Recruiter";
+      title = args?['title'] ?? "Recruiter Chat";
+
+      final recruiterId = args?['recruiter_id'];
+
+      if (recruiterId == null) {
+        setState(() {
+          isLoading = false;
+          errorMessage = "Recruiter ID introuvable";
+        });
+        return;
+      }
+
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token');
+
+      if (token == null || token.isEmpty) {
+        setState(() {
+          isLoading = false;
+          errorMessage = "Token introuvable";
+        });
+        return;
+      }
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/messages/conversation'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'recruiter_id': recruiterId,
+        }),
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        conversationId =
+            data['conversation']?['id'] ?? data['conversationId'];
+
+        if (conversationId == null) {
+          setState(() {
+            isLoading = false;
+            errorMessage = "Conversation introuvable";
+          });
+          return;
+        }
+
+        await fetchMessages();
+      } else {
+        setState(() {
+          isLoading = false;
+          errorMessage =
+              data['message'] ?? "Erreur lors de l'ouverture du chat";
+        });
+      }
+    } catch (e) {
+      setState(() {
+        isLoading = false;
+        errorMessage = "Erreur de connexion au serveur";
+      });
+    }
+  }
+
+  Future<void> fetchMessages() async {
+    if (conversationId == null) return;
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token');
+      final myUserId = prefs.getString('user_id');
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/messages/$conversationId'),
+        headers: {
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        final List<dynamic> backendMessages = data['messages'] ?? [];
+
+        final mappedMessages = backendMessages.map((message) {
+          final senderId = message['sender_id']?.toString();
+          return {
+            ...message,
+            "isMe": senderId == myUserId,
+            "text": message["message"] ?? "",
+            "time": formatMessageTime(message["created_at"]),
+          };
+        }).toList();
+
+        setState(() {
+          messages = mappedMessages;
+          isLoading = false;
+          errorMessage = null;
+        });
+      } else {
+        setState(() {
+          isLoading = false;
+          errorMessage = data['message'] ?? "Erreur lors du chargement";
+        });
+      }
+    } catch (e) {
+      setState(() {
+        isLoading = false;
+        errorMessage = "Erreur de connexion au serveur";
+      });
+    }
+  }
+
+  String formatMessageTime(dynamic createdAt) {
+    if (createdAt == null) return "Now";
+    final raw = createdAt.toString();
+    if (raw.length >= 16) {
+      final cleaned = raw.replaceFirst('T', ' ');
+      return cleaned.substring(11, 16);
+    }
+    return raw;
+  }
+
+  Future<void> _sendMessage() async {
+    final text = messageController.text.trim();
+
+    if (text.isEmpty || conversationId == null || isSending) return;
+
+    setState(() {
+      isSending = true;
+    });
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token');
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/messages'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'conversation_id': conversationId,
+          'message': text,
+        }),
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (!mounted) return;
+
+      if (response.statusCode == 201) {
+        messageController.clear();
+        await fetchMessages();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(data['message'] ?? "Erreur lors de l'envoi"),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Erreur de connexion au serveur"),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          isSending = false;
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    /// ==============================
-    /// Données envoyées depuis request details
-    /// ==============================
-    final args =
-        ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
-
-    final String company = args?['company'] ?? "Company name";
-    final String title = args?['title'] ?? "Recruiter Chat";
-
     return Scaffold(
       backgroundColor: backgroundBottom,
       resizeToAvoidBottomInset: true,
@@ -84,28 +243,9 @@ class _DirectChatThreadScreenState extends State<DirectChatThreadScreen> {
           child: Column(
             children: [
               _buildTopBar(context, company, title),
-
-              /// ==============================
-              /// Liste des messages
-              /// ==============================
               Expanded(
-                child: ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
-                  itemCount: messages.length,
-                  itemBuilder: (context, index) {
-                    final message = messages[index];
-                    return _buildMessageBubble(
-                      text: message["text"] ?? "",
-                      time: message["time"] ?? "",
-                      isMe: message["isMe"] ?? false,
-                    );
-                  },
-                ),
+                child: _buildBodyContent(),
               ),
-
-              /// ==============================
-              /// Barre d'envoi en bas
-              /// ==============================
               _buildInputBar(),
             ],
           ),
@@ -114,9 +254,52 @@ class _DirectChatThreadScreenState extends State<DirectChatThreadScreen> {
     );
   }
 
-  /// ==============================
-  /// Top bar du chat
-  /// ==============================
+  Widget _buildBodyContent() {
+    if (isLoading) {
+      return const Center(
+        child: CircularProgressIndicator(),
+      );
+    }
+
+    if (errorMessage != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            errorMessage!,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Colors.white),
+          ),
+        ),
+      );
+    }
+
+    if (messages.isEmpty) {
+      return Center(
+        child: Text(
+          "No messages yet",
+          style: TextStyle(
+            color: Colors.white.withOpacity(0.65),
+            fontSize: 15,
+          ),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+      itemCount: messages.length,
+      itemBuilder: (context, index) {
+        final message = messages[index];
+        return _buildMessageBubble(
+          text: message["text"] ?? "",
+          time: message["time"] ?? "",
+          isMe: message["isMe"] ?? false,
+        );
+      },
+    );
+  }
+
   Widget _buildTopBar(BuildContext context, String company, String title) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(18, 14, 18, 10),
@@ -139,9 +322,7 @@ class _DirectChatThreadScreenState extends State<DirectChatThreadScreen> {
               ),
             ),
           ),
-
           const SizedBox(width: 12),
-
           Container(
             width: 48,
             height: 48,
@@ -154,9 +335,7 @@ class _DirectChatThreadScreenState extends State<DirectChatThreadScreen> {
               color: Colors.white54,
             ),
           ),
-
           const SizedBox(width: 12),
-
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -184,9 +363,7 @@ class _DirectChatThreadScreenState extends State<DirectChatThreadScreen> {
               ],
             ),
           ),
-
           const SizedBox(width: 10),
-
           Container(
             width: 44,
             height: 44,
@@ -205,9 +382,6 @@ class _DirectChatThreadScreenState extends State<DirectChatThreadScreen> {
     );
   }
 
-  /// ==============================
-  /// Bulle de message
-  /// ==============================
   Widget _buildMessageBubble({
     required String text,
     required String time,
@@ -263,9 +437,6 @@ class _DirectChatThreadScreenState extends State<DirectChatThreadScreen> {
     );
   }
 
-  /// ==============================
-  /// Barre d'écriture
-  /// ==============================
   Widget _buildInputBar() {
     return Container(
       color: backgroundBottom,
@@ -289,9 +460,7 @@ class _DirectChatThreadScreenState extends State<DirectChatThreadScreen> {
                 ),
               ),
             ),
-
             const SizedBox(width: 10),
-
             Expanded(
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -313,11 +482,9 @@ class _DirectChatThreadScreenState extends State<DirectChatThreadScreen> {
                 ),
               ),
             ),
-
             const SizedBox(width: 10),
-
             GestureDetector(
-              onTap: _sendMessage,
+              onTap: isSending ? null : _sendMessage,
               child: Container(
                 width: 56,
                 height: 56,
@@ -332,35 +499,23 @@ class _DirectChatThreadScreenState extends State<DirectChatThreadScreen> {
                     ),
                   ],
                 ),
-                child: const Icon(
-                  Icons.send_rounded,
-                  color: Colors.white,
-                ),
+                child: isSending
+                    ? const Padding(
+                        padding: EdgeInsets.all(16),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(
+                        Icons.send_rounded,
+                        color: Colors.white,
+                      ),
               ),
             ),
           ],
         ),
       ),
     );
-  }
-
-  /// ==============================
-  /// Envoi temporaire du message
-  /// Plus tard: appel backend / socket
-  /// ==============================
-  void _sendMessage() {
-    final text = messageController.text.trim();
-
-    if (text.isEmpty) return;
-
-    setState(() {
-      messages.add({
-        "text": text,
-        "isMe": true,
-        "time": "Now",
-      });
-    });
-
-    messageController.clear();
   }
 }

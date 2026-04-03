@@ -1,4 +1,7 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 class MessagesScreen extends StatefulWidget {
   const MessagesScreen({super.key});
@@ -14,50 +17,25 @@ class _MessagesScreenState extends State<MessagesScreen>
   static const Color backgroundBottom = Color(0xFF050A12);
   static const Color cardColor = Color(0xFF121C31);
 
+  static const String baseUrl = 'http://192.168.100.47:5000/api';
+
   late TabController _tabController;
 
-  final List<Map<String, dynamic>> chats = [
-    {
-      "company": "Company name",
-      "lastMessage": "We would like to discuss an opportunity with you.",
-      "time": "09:15",
-      "isUnread": true,
-      "title": "Recruiter Chat",
-    },
-    {
-      "company": "Company name",
-      "lastMessage": "Thank you for your reply. We will contact you soon.",
-      "time": "Yesterday",
-      "isUnread": false,
-      "title": "Interview Follow-up",
-    },
-  ];
+  List<dynamic> chats = [];
+  List<dynamic> requests = [];
 
-  final List<Map<String, dynamic>> requests = [
-    {
-      "company": "Company name",
-      "title": "Interview invitation",
-      "subtitle": "We would like to discuss an opportunity with you.",
-      "time": "2 min ago",
-      "isUnread": true,
-      "type": "INVITE",
-      "color": const Color(0xFF22C55E),
-    },
-    {
-      "company": "Company name",
-      "title": "Profile request",
-      "subtitle": "A recruiter wants to view more details about your profile.",
-      "time": "1 hour ago",
-      "isUnread": true,
-      "type": "REQUEST",
-      "color": const Color(0xFF1E6CFF),
-    },
-  ];
+  bool isLoadingChats = true;
+  bool isLoadingRequests = true;
+
+  String? chatsError;
+  String? requestsError;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    fetchChats();
+    fetchRequests();
   }
 
   @override
@@ -66,12 +44,163 @@ class _MessagesScreenState extends State<MessagesScreen>
     super.dispose();
   }
 
+  Future<void> fetchChats() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token');
+      final myUserId = prefs.getString('user_id');
+
+      if (token == null || token.isEmpty) {
+        setState(() {
+          isLoadingChats = false;
+          chatsError = "Token introuvable";
+        });
+        return;
+      }
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/messages/conversations'),
+        headers: {
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        final List<dynamic> conversations = data['conversations'] ?? [];
+
+        final mappedChats = conversations.map((chat) {
+          final bool amCandidate =
+              chat['candidate_id']?.toString() == myUserId?.toString();
+
+          final dynamic otherUserId =
+              amCandidate ? chat['recruiter_id'] : chat['candidate_id'];
+
+          return {
+            ...chat,
+            'company': amCandidate
+                ? "Recruiter #${chat['recruiter_id']}"
+                : "Candidate #${chat['candidate_id']}",
+            'title': "Direct Conversation",
+            'lastMessage': "Open conversation",
+            'time': _formatDate(chat['created_at']),
+            'isUnread': false,
+            'other_user_id': otherUserId,
+            'recruiter_id': chat['recruiter_id'],
+          };
+        }).toList();
+
+        setState(() {
+          chats = mappedChats;
+          isLoadingChats = false;
+          chatsError = null;
+        });
+      } else {
+        setState(() {
+          isLoadingChats = false;
+          chatsError =
+              data['message'] ?? "Erreur lors du chargement des conversations";
+        });
+      }
+    } catch (e) {
+      setState(() {
+        isLoadingChats = false;
+        chatsError = "Erreur de connexion au serveur";
+      });
+    }
+  }
+
+  Future<void> fetchRequests() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token');
+
+      if (token == null || token.isEmpty) {
+        setState(() {
+          isLoadingRequests = false;
+          requestsError = "Token introuvable";
+        });
+        return;
+      }
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/requests/received'),
+        headers: {
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        final List<dynamic> backendRequests = data['requests'] ?? [];
+
+        final mappedRequests = backendRequests.map((request) {
+          final status = (request['status'] ?? 'pending').toString();
+          return {
+            ...request,
+            "company": "Recruiter #${request['recruiter_id']}",
+            "title": "Access Request",
+            "subtitle": "A recruiter wants to access your profile.",
+            "time": _formatDate(request['created_at']),
+            "isUnread": status.toLowerCase() == 'pending',
+            "type": status.toUpperCase(),
+            "color": _getStatusColor(status),
+          };
+        }).toList();
+
+        setState(() {
+          requests = mappedRequests;
+          isLoadingRequests = false;
+          requestsError = null;
+        });
+      } else {
+        setState(() {
+          isLoadingRequests = false;
+          requestsError =
+              data['message'] ?? "Erreur lors du chargement des requests";
+        });
+      }
+    } catch (e) {
+      setState(() {
+        isLoadingRequests = false;
+        requestsError = "Erreur de connexion au serveur";
+      });
+    }
+  }
+
+  Color _getStatusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'approved':
+        return const Color(0xFF22C55E);
+      case 'rejected':
+        return const Color(0xFFFF5A6E);
+      case 'pending':
+      default:
+        return const Color(0xFFFFB020);
+    }
+  }
+
+  String _formatDate(dynamic createdAt) {
+    if (createdAt == null) return "Recently";
+    final raw = createdAt.toString().replaceFirst('T', ' ');
+    if (raw.length >= 16) return raw.substring(0, 16);
+    return raw;
+  }
+
   void openChat(Map<String, dynamic> chat) {
     Navigator.pushNamed(
       context,
       '/direct-chat',
-      arguments: chat,
-    );
+      arguments: {
+        'recruiter_id': chat['recruiter_id'],
+        'company': chat['company'],
+        'title': chat['title'],
+      },
+    ).then((_) {
+      fetchChats();
+    });
   }
 
   void openRequest(Map<String, dynamic> request) {
@@ -79,7 +208,10 @@ class _MessagesScreenState extends State<MessagesScreen>
       context,
       '/request-decision',
       arguments: request,
-    );
+    ).then((_) {
+      fetchRequests();
+      fetchChats();
+    });
   }
 
   @override
@@ -166,6 +298,25 @@ class _MessagesScreenState extends State<MessagesScreen>
   }
 
   Widget _buildChatsTab() {
+    if (isLoadingChats) {
+      return const Center(
+        child: CircularProgressIndicator(),
+      );
+    }
+
+    if (chatsError != null) {
+      return _buildErrorState(
+        chatsError!,
+        onRetry: () {
+          setState(() {
+            isLoadingChats = true;
+            chatsError = null;
+          });
+          fetchChats();
+        },
+      );
+    }
+
     if (chats.isEmpty) {
       return _buildEmptyState("No chats available");
     }
@@ -272,6 +423,25 @@ class _MessagesScreenState extends State<MessagesScreen>
   }
 
   Widget _buildRequestsTab() {
+    if (isLoadingRequests) {
+      return const Center(
+        child: CircularProgressIndicator(),
+      );
+    }
+
+    if (requestsError != null) {
+      return _buildErrorState(
+        requestsError!,
+        onRetry: () {
+          setState(() {
+            isLoadingRequests = true;
+            requestsError = null;
+          });
+          fetchRequests();
+        },
+      );
+    }
+
     if (requests.isEmpty) {
       return _buildEmptyState("No requests available");
     }
@@ -446,6 +616,39 @@ class _MessagesScreenState extends State<MessagesScreen>
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorState(String text, {required VoidCallback onRetry}) {
+    return Padding(
+      padding: const EdgeInsets.all(18),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: cardColor,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: Colors.white.withOpacity(0.04)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              text,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.7),
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(height: 12),
+            ElevatedButton(
+              onPressed: onRetry,
+              child: const Text("Réessayer"),
             ),
           ],
         ),

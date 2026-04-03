@@ -13,9 +13,15 @@ class ApplicationSuccessScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final Map<String, dynamic>? args =
+        ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+
+    final String title = args?['title'] ?? "Job";
+    final String company =
+        args?['company'] ?? args?['company_name'] ?? "Company";
+
     /// ==============================
     /// Jobs similaires temporaires
-    /// Plus tard: viendront du backend
     /// ==============================
     final List<Map<String, dynamic>> similarJobs = [
       {
@@ -46,9 +52,6 @@ class ApplicationSuccessScreen extends StatelessWidget {
         child: SafeArea(
           child: Column(
             children: [
-              /// ==============================
-              /// Contenu principal scrollable
-              /// ==============================
               Expanded(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.fromLTRB(18, 16, 18, 24),
@@ -56,13 +59,9 @@ class ApplicationSuccessScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _buildTopBar(context),
-
                       const SizedBox(height: 24),
-
                       _buildSuccessIcon(),
-
                       const SizedBox(height: 28),
-
                       const Center(
                         child: Text(
                           "Application Sent!",
@@ -75,9 +74,19 @@ class ApplicationSuccessScreen extends StatelessWidget {
                           ),
                         ),
                       ),
-
+                      const SizedBox(height: 10),
+                      Center(
+                        child: Text(
+                          "$title at $company",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.7),
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
                       const SizedBox(height: 12),
-
                       Center(
                         child: Text(
                           "Your application has been submitted successfully.\nGood luck with your journey!",
@@ -89,31 +98,20 @@ class ApplicationSuccessScreen extends StatelessWidget {
                           ),
                         ),
                       ),
-
                       const SizedBox(height: 34),
-
                       _buildSectionHeader(
                         title: "Similar Jobs in Algeria",
                         onSeeAll: () {},
                       ),
-
                       const SizedBox(height: 14),
-
                       ...similarJobs.map(_buildSimilarJobCard),
-
                       const SizedBox(height: 18),
-
                       _buildDiscoverCard(),
-
                       const SizedBox(height: 20),
                     ],
                   ),
                 ),
               ),
-
-              /// ==============================
-              /// Boutons fixes en bas
-              /// ==============================
               Container(
                 color: backgroundBottom,
                 padding: const EdgeInsets.fromLTRB(18, 10, 18, 24),
@@ -124,7 +122,6 @@ class ApplicationSuccessScreen extends StatelessWidget {
                       height: 58,
                       child: ElevatedButton(
                         onPressed: () {
-                          /// Retour vers Home candidate
                           Navigator.pushNamedAndRemoveUntil(
                             context,
                             '/candidate',
@@ -148,12 +145,9 @@ class ApplicationSuccessScreen extends StatelessWidget {
                         ),
                       ),
                     ),
-
                     const SizedBox(height: 10),
-
                     TextButton(
                       onPressed: () {
-                        /// Plus tard: aller vers applications list
                         Navigator.pushNamed(context, '/applications');
                       },
                       child: const Text(
@@ -319,9 +313,7 @@ class ApplicationSuccessScreen extends StatelessWidget {
               color: Colors.white54,
             ),
           ),
-
           const SizedBox(width: 14),
-
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -364,9 +356,7 @@ class ApplicationSuccessScreen extends StatelessWidget {
               ],
             ),
           ),
-
           const SizedBox(width: 10),
-
           Icon(
             Icons.bookmark_border_rounded,
             color: Colors.white.withOpacity(0.75),

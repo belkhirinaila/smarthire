@@ -1,4 +1,7 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 class RequestsInboxScreen extends StatefulWidget {
   const RequestsInboxScreen({super.key});
@@ -8,67 +11,33 @@ class RequestsInboxScreen extends StatefulWidget {
 }
 
 class _RequestsInboxScreenState extends State<RequestsInboxScreen> {
-  /// ==============================
-  /// Couleurs principales
-  /// ==============================
   static const Color primaryBlue = Color(0xFF1E6CFF);
   static const Color backgroundTop = Color(0xFF08162D);
   static const Color backgroundBottom = Color(0xFF050A12);
   static const Color cardColor = Color(0xFF121C31);
 
-  /// ==============================
-  /// Contrôleur de recherche
-  /// ==============================
+  static const String baseUrl = 'http://192.168.100.47:5000/api';
+
   final TextEditingController searchController = TextEditingController();
 
-  /// ==============================
-  /// Filtre sélectionné
-  /// ==============================
   int selectedTabIndex = 0;
 
-  /// ==============================
-  /// Onglets de filtre
-  /// ==============================
   final List<String> tabs = [
     "All",
-    "Unread",
-    "Invites",
-    "Archived",
+    "Pending",
+    "Approved",
+    "Rejected",
   ];
 
-  /// ==============================
-  /// Liste temporaire des requests
-  /// Plus tard: viendra du backend
-  /// ==============================
-  final List<Map<String, dynamic>> requests = [
-    {
-      "company": "Company name",
-      "title": "Interview invitation",
-      "subtitle": "We would like to discuss an opportunity with you.",
-      "time": "2 min ago",
-      "isUnread": true,
-      "type": "INVITE",
-      "color": const Color(0xFF22C55E),
-    },
-    {
-      "company": "Company name",
-      "title": "Profile request",
-      "subtitle": "A recruiter wants to view more details about your profile.",
-      "time": "1 hour ago",
-      "isUnread": true,
-      "type": "REQUEST",
-      "color": const Color(0xFF1E6CFF),
-    },
-    {
-      "company": "Company name",
-      "title": "Conversation request",
-      "subtitle": "A recruiter is interested in contacting you directly.",
-      "time": "Yesterday",
-      "isUnread": false,
-      "type": "MESSAGE",
-      "color": const Color(0xFFFFB020),
-    },
-  ];
+  List<dynamic> requests = [];
+  bool isLoading = true;
+  String? errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    fetchRequests();
+  }
 
   @override
   void dispose() {
@@ -76,15 +45,112 @@ class _RequestsInboxScreenState extends State<RequestsInboxScreen> {
     super.dispose();
   }
 
-  /// ==============================
-  /// Ouvrir détails d'une request
-  /// ==============================
+  Future<void> fetchRequests() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token');
+
+      if (token == null || token.isEmpty) {
+        setState(() {
+          isLoading = false;
+          errorMessage = "Token introuvable. Veuillez vous reconnecter.";
+        });
+        return;
+      }
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/requests/received'),
+        headers: {
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        setState(() {
+          requests = data['requests'] ?? [];
+          isLoading = false;
+          errorMessage = null;
+        });
+      } else {
+        setState(() {
+          isLoading = false;
+          errorMessage =
+              data['message'] ?? "Erreur lors du chargement des requests";
+        });
+      }
+    } catch (e) {
+      setState(() {
+        isLoading = false;
+        errorMessage = "Erreur de connexion au serveur";
+      });
+    }
+  }
+
   void openRequestDetails(Map<String, dynamic> request) {
     Navigator.pushNamed(
       context,
       '/request-decision',
       arguments: request,
-    );
+    ).then((_) {
+      fetchRequests();
+    });
+  }
+
+  Color getStatusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'approved':
+        return const Color(0xFF22C55E);
+      case 'rejected':
+        return const Color(0xFFFF5A6E);
+      case 'pending':
+      default:
+        return const Color(0xFFFFB020);
+    }
+  }
+
+  String formatDate(dynamic createdAt) {
+    if (createdAt == null) return "Recently";
+    final raw = createdAt.toString();
+    if (raw.length >= 16) {
+      return raw.substring(0, 16).replaceFirst('T', ' ');
+    }
+    return raw;
+  }
+
+  List<dynamic> get filteredRequests {
+    List<dynamic> result = List.from(requests);
+
+    final query = searchController.text.trim().toLowerCase();
+    if (query.isNotEmpty) {
+      result = result.where((request) {
+        final recruiter =
+            "recruiter #${request['recruiter_id'] ?? ''}".toLowerCase();
+        final status = (request['status'] ?? '').toString().toLowerCase();
+        return recruiter.contains(query) || status.contains(query);
+      }).toList();
+    }
+
+    if (selectedTabIndex == 1) {
+      result = result
+          .where((request) =>
+              (request['status'] ?? 'pending').toString().toLowerCase() ==
+              'pending')
+          .toList();
+    } else if (selectedTabIndex == 2) {
+      result = result
+          .where((request) =>
+              (request['status'] ?? '').toString().toLowerCase() == 'approved')
+          .toList();
+    } else if (selectedTabIndex == 3) {
+      result = result
+          .where((request) =>
+              (request['status'] ?? '').toString().toLowerCase() == 'rejected')
+          .toList();
+    }
+
+    return result;
   }
 
   @override
@@ -111,18 +177,12 @@ class _RequestsInboxScreenState extends State<RequestsInboxScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _buildTopBar(),
-
                       const SizedBox(height: 20),
-
                       _buildSearchBar(),
-
                       const SizedBox(height: 18),
-
                       _buildTabs(),
-
                       const SizedBox(height: 18),
-
-                      _buildRequestsList(),
+                      _buildBodyContent(),
                     ],
                   ),
                 ),
@@ -131,17 +191,192 @@ class _RequestsInboxScreenState extends State<RequestsInboxScreen> {
           ),
         ),
       ),
-
-      /// ==============================
-      /// Bottom navigation
-      /// ==============================
       bottomNavigationBar: _buildBottomNav(),
     );
   }
 
-  /// ==============================
-  /// Barre supérieure
-  /// ==============================
+  Widget _buildBodyContent() {
+    if (isLoading) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.only(top: 40),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (errorMessage != null) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: cardColor,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: Colors.white.withOpacity(0.04)),
+        ),
+        child: Column(
+          children: [
+            Text(
+              errorMessage!,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.75),
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(height: 12),
+            ElevatedButton(
+              onPressed: () {
+                setState(() {
+                  isLoading = true;
+                  errorMessage = null;
+                });
+                fetchRequests();
+              },
+              child: const Text("Réessayer"),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (filteredRequests.isEmpty) {
+      return _buildEmptyState();
+    }
+
+    return Column(
+      children: filteredRequests.map((request) {
+        final status = (request["status"] ?? "pending").toString();
+        final badgeColor = getStatusColor(status);
+
+        final Map<String, dynamic> mappedRequest = {
+          ...request as Map<String, dynamic>,
+         "company": "Recruiter #${request["recruiter_id"] ?? ""}",
+         "title": "Access Request",
+         "subtitle": "A recruiter wants access to your profile.",
+         "time": formatDate(request["created_at"]),
+         "isUnread": status.toLowerCase() == "pending",
+         "type": status.toUpperCase(),
+         "color": badgeColor,
+       };
+
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 14),
+          child: GestureDetector(
+            onTap: () => openRequestDetails(mappedRequest),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: cardColor,
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(color: Colors.white.withOpacity(0.04)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Stack(
+                    children: [
+                      Container(
+                        width: 58,
+                        height: 58,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.06),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: const Icon(
+                          Icons.business_rounded,
+                          color: Colors.white54,
+                        ),
+                      ),
+                      if (status.toLowerCase() == "pending")
+                        Positioned(
+                          top: 0,
+                          right: 0,
+                          child: Container(
+                            width: 12,
+                            height: 12,
+                            decoration: const BoxDecoration(
+                              color: Colors.redAccent,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          mappedRequest["company"] ?? "",
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.55),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          mappedRequest["title"] ?? "",
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 17,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          mappedRequest["subtitle"] ?? "",
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.55),
+                            fontSize: 14,
+                            height: 1.5,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            _buildTypeBadge(
+                              text: mappedRequest["type"] ?? "",
+                              color: mappedRequest["color"] ?? primaryBlue,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                mappedRequest["time"] ?? "",
+                                style: TextStyle(
+                                  color: Colors.white.withOpacity(0.42),
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    color: Colors.white.withOpacity(0.35),
+                    size: 16,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
   Widget _buildTopBar() {
     return Row(
       children: [
@@ -199,9 +434,6 @@ class _RequestsInboxScreenState extends State<RequestsInboxScreen> {
     );
   }
 
-  /// ==============================
-  /// Barre de recherche
-  /// ==============================
   Widget _buildSearchBar() {
     return Container(
       height: 58,
@@ -212,6 +444,7 @@ class _RequestsInboxScreenState extends State<RequestsInboxScreen> {
       ),
       child: TextField(
         controller: searchController,
+        onChanged: (_) => setState(() {}),
         style: const TextStyle(color: Colors.white),
         decoration: InputDecoration(
           border: InputBorder.none,
@@ -230,9 +463,6 @@ class _RequestsInboxScreenState extends State<RequestsInboxScreen> {
     );
   }
 
-  /// ==============================
-  /// Onglets horizontaux
-  /// ==============================
   Widget _buildTabs() {
     return SizedBox(
       height: 36,
@@ -281,142 +511,6 @@ class _RequestsInboxScreenState extends State<RequestsInboxScreen> {
     );
   }
 
-  /// ==============================
-  /// Liste des requests
-  /// ==============================
-  Widget _buildRequestsList() {
-    if (requests.isEmpty) {
-      return _buildEmptyState();
-    }
-
-    return Column(
-      children: requests.map((request) {
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 14),
-          child: GestureDetector(
-            onTap: () => openRequestDetails(request),
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: cardColor,
-                borderRadius: BorderRadius.circular(22),
-                border: Border.all(color: Colors.white.withOpacity(0.04)),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  /// Avatar / logo entreprise
-                  Stack(
-                    children: [
-                      Container(
-                        width: 58,
-                        height: 58,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.06),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: const Icon(
-                          Icons.business_rounded,
-                          color: Colors.white54,
-                        ),
-                      ),
-                      if (request["isUnread"] == true)
-                        Positioned(
-                          top: 0,
-                          right: 0,
-                          child: Container(
-                            width: 12,
-                            height: 12,
-                            decoration: const BoxDecoration(
-                              color: Colors.redAccent,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-
-                  const SizedBox(width: 14),
-
-                  /// Contenu principal
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          request["company"] ?? "",
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.55),
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          request["title"] ?? "",
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 17,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          request["subtitle"] ?? "",
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.55),
-                            fontSize: 14,
-                            height: 1.5,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            _buildTypeBadge(
-                              text: request["type"] ?? "",
-                              color: request["color"] ?? primaryBlue,
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                request["time"] ?? "",
-                                style: TextStyle(
-                                  color: Colors.white.withOpacity(0.42),
-                                  fontSize: 13,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(width: 10),
-
-                  Icon(
-                    Icons.arrow_forward_ios_rounded,
-                    color: Colors.white.withOpacity(0.35),
-                    size: 16,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      }).toList(),
-    );
-  }
-
-  /// ==============================
-  /// Badge type
-  /// ==============================
   Widget _buildTypeBadge({
     required String text,
     required Color color,
@@ -439,9 +533,6 @@ class _RequestsInboxScreenState extends State<RequestsInboxScreen> {
     );
   }
 
-  /// ==============================
-  /// Etat vide
-  /// ==============================
   Widget _buildEmptyState() {
     return Container(
       width: double.infinity,
@@ -472,9 +563,6 @@ class _RequestsInboxScreenState extends State<RequestsInboxScreen> {
     );
   }
 
-  /// ==============================
-  /// Bottom nav
-  /// ==============================
   Widget _buildBottomNav() {
     return Container(
       color: backgroundBottom,
@@ -529,9 +617,6 @@ class _RequestsInboxScreenState extends State<RequestsInboxScreen> {
     );
   }
 
-  /// ==============================
-  /// Item nav
-  /// ==============================
   Widget _buildNavItem({
     required IconData icon,
     required String label,

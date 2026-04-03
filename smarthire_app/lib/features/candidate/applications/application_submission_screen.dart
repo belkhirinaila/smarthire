@@ -1,4 +1,7 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ApplicationSubmissionScreen extends StatefulWidget {
   const ApplicationSubmissionScreen({super.key});
@@ -18,6 +21,11 @@ class _ApplicationSubmissionScreenState
   static const Color backgroundBottom = Color(0xFF050A12);
   static const Color cardColor = Color(0xFF121C31);
 
+  /// ==============================
+  /// Base URL API
+  /// ==============================
+  static const String baseUrl = 'http://192.168.100.47:5000/api';
+
   /// Controller pour le message optionnel
   final TextEditingController messageController = TextEditingController();
 
@@ -35,17 +43,16 @@ class _ApplicationSubmissionScreenState
     /// ==============================
     /// Récupération des données du job
     /// ==============================
-    final args =
+    final Map<String, dynamic>? args =
         ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
 
     final String title = args?['title'] ?? "Job title";
-    final String company = args?['company'] ?? "Company name";
+    final String company =
+        args?['company'] ?? args?['company_name'] ?? "Company name";
     final String location = args?['location'] ?? "Location";
 
     return Scaffold(
-      /// Couleur générale du scaffold pour éviter le blanc
       backgroundColor: backgroundBottom,
-
       body: Container(
         width: double.infinity,
         decoration: const BoxDecoration(
@@ -58,9 +65,6 @@ class _ApplicationSubmissionScreenState
         child: SafeArea(
           child: Column(
             children: [
-              /// ==============================
-              /// Contenu principal scrollable
-              /// ==============================
               Expanded(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.fromLTRB(18, 14, 18, 24),
@@ -68,13 +72,9 @@ class _ApplicationSubmissionScreenState
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _buildTopBar(),
-
                       const SizedBox(height: 24),
-
                       _buildJobCard(title, company, location),
-
                       const SizedBox(height: 28),
-
                       const Text(
                         "Your Message (optional)",
                         style: TextStyle(
@@ -83,15 +83,10 @@ class _ApplicationSubmissionScreenState
                           fontWeight: FontWeight.w800,
                         ),
                       ),
-
                       const SizedBox(height: 14),
-
                       _buildMessageInput(),
-
                       const SizedBox(height: 26),
-
                       _buildUploadCV(),
-
                       const SizedBox(height: 24),
                     ],
                   ),
@@ -101,15 +96,11 @@ class _ApplicationSubmissionScreenState
           ),
         ),
       ),
-
-      /// ==============================
-      /// Barre du bas avec fond sombre
-      /// ==============================
       bottomNavigationBar: Container(
         color: backgroundBottom,
         child: SafeArea(
           top: false,
-          child: _buildBottomButton(),
+          child: _buildBottomButton(args),
         ),
       ),
     );
@@ -248,7 +239,7 @@ class _ApplicationSubmissionScreenState
   }
 
   /// ==============================
-  /// Bloc upload CV (visuel pour le moment)
+  /// Bloc upload CV
   /// ==============================
   Widget _buildUploadCV() {
     return Container(
@@ -291,14 +282,14 @@ class _ApplicationSubmissionScreenState
   /// ==============================
   /// Bouton du bas
   /// ==============================
-  Widget _buildBottomButton() {
+  Widget _buildBottomButton(Map<String, dynamic>? args) {
     return Container(
       color: backgroundBottom,
       padding: const EdgeInsets.fromLTRB(18, 14, 18, 24),
       child: SizedBox(
         height: 58,
         child: ElevatedButton(
-          onPressed: isSubmitting ? null : submitApplication,
+          onPressed: isSubmitting ? null : () => submitApplication(args),
           style: ElevatedButton.styleFrom(
             backgroundColor: primaryBlue,
             foregroundColor: Colors.white,
@@ -330,23 +321,89 @@ class _ApplicationSubmissionScreenState
   }
 
   /// ==============================
-  /// Soumission temporaire
-  /// Plus tard: appel backend
+  /// Soumission réelle vers le backend
   /// ==============================
-  void submitApplication() async {
+  Future<void> submitApplication(Map<String, dynamic>? args) async {
+    final jobId = args?['id'];
+
+    if (jobId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Job ID introuvable")),
+      );
+      return;
+    }
+
     setState(() {
       isSubmitting = true;
     });
 
-    await Future.delayed(const Duration(seconds: 1));
+    try {
+      final prefs = await SharedPreferences.getInstance();
 
-    if (!mounted) return;
+      /// Si chez toi le token est stocké sous une autre clé,
+      /// remplace 'token' par le vrai nom
+      final token = prefs.getString('token');
 
-    setState(() {
-      isSubmitting = false;
-    });
+      if (token == null || token.isEmpty) {
+        if (!mounted) return;
+        setState(() {
+          isSubmitting = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Token introuvable. Veuillez vous reconnecter.")),
+        );
+        return;
+      }
 
-    /// Navigation temporaire vers l'écran success
-    Navigator.pushReplacementNamed(context, '/application-success');
+      final response = await http.post(
+        Uri.parse('$baseUrl/applications'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'job_id': jobId,
+        }),
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (!mounted) return;
+
+      setState(() {
+        isSubmitting = false;
+      });
+
+      if (response.statusCode == 201) {
+        Navigator.pushReplacementNamed(
+          context,
+          '/application-success',
+          arguments: {
+            ...?args,
+            'application_id': data['application_id'],
+          },
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              data['message'] ?? 'Erreur lors de la soumission de la candidature',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        isSubmitting = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Erreur de connexion au serveur"),
+        ),
+      );
+    }
   }
 }

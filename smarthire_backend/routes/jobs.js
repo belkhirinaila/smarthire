@@ -6,12 +6,51 @@ const { protect, authorize } = require("../middleware/authMiddleware");
 // CREATE JOB (recruiter)
 router.post("/", protect, authorize("recruiter"), async (req, res) => {
   try {
-    const { title, description, location, salary, company_name } = req.body;
+    const {
+      title,
+      description,
+      location,
+      salary,
+      company_name,
+      type,
+      work_mode,
+      category
+    } = req.body;
 
     const [result] = await db.query(
-      "INSERT INTO jobs (title, description, location, salary, company_name, recruiter_id) VALUES (?, ?, ?, ?, ?, ?)",
-      [title, description, location, salary, company_name, req.user.id]
+      `INSERT INTO jobs 
+      (title, description, location, salary, company_name, recruiter_id, type, work_mode, category) 
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        title,
+        description,
+        location,
+        salary,
+        company_name,
+        req.user.id,
+        type,
+        work_mode,
+        category
+      ]
     );
+
+    // مثال بسيط: notif عامة لكل candidates
+    const [candidates] = await db.query(
+      "SELECT id FROM users WHERE role = 'candidate'"
+    );
+
+    for (const candidate of candidates) {
+      await db.query(
+        `INSERT INTO notifications (user_id, title, message, type)
+         VALUES (?, ?, ?, ?)`,
+        [
+          candidate.id,
+          "New job posted",
+          `${company_name} posted a new ${type || 'job'} opportunity.`,
+          "job"
+        ]
+      );
+    }
 
     res.status(201).json({
       message: "Job créé avec succès",
@@ -25,12 +64,13 @@ router.post("/", protect, authorize("recruiter"), async (req, res) => {
 // GET ALL JOBS
 router.get("/", async (req, res) => {
   try {
-    const [jobs] = await db.query("SELECT * FROM jobs");
+    const [jobs] = await db.query("SELECT * FROM jobs ORDER BY created_at DESC");
     res.json({ jobs });
   } catch (err) {
     res.status(500).json({ message: "Erreur serveur", error: err.message });
   }
 });
+
 // GET ONE JOB BY ID
 router.get("/:id", async (req, res) => {
   try {
@@ -52,4 +92,5 @@ router.get("/:id", async (req, res) => {
     res.status(500).json({ message: "Erreur serveur", error: err.message });
   }
 });
+
 module.exports = router;

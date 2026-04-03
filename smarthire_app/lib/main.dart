@@ -25,7 +25,8 @@ import 'package:smarthire_app/features/candidate/profile/experience_education_sc
 import 'package:smarthire_app/features/candidate/profile/privacy_visibility_screen.dart';
 import 'package:smarthire_app/features/candidate/requests/request_decision_screen.dart';
 import 'package:smarthire_app/features/candidate/direct_chat_thread_screen.dart';
-
+import 'package:smarthire_app/features/candidate/jobs/saved_jobs_screen.dart';
+import 'package:smarthire_app/features/candidate/notifications_screen.dart';
 import 'package:smarthire_app/features/company/company_home_screen.dart';
 import 'package:smarthire_app/features/admin/admin_home_screen.dart';
 
@@ -82,6 +83,7 @@ class SmartHireApp extends StatelessWidget {
         '/apply': (context) => const ApplicationSubmissionScreen(),
         '/application-success': (context) => const ApplicationSuccessScreen(),
         '/application-details': (context) => const ApplicationDetailsScreen(),
+        '/saved-jobs': (context) => const SavedJobsScreen(),
 
         /// ==============================
         /// Candidate - profile flow
@@ -97,6 +99,10 @@ class SmartHireApp extends StatelessWidget {
         /// ==============================
         '/request-decision': (context) => const RequestDecisionScreen(),
         '/direct-chat': (context) => const DirectChatThreadScreen(),
+        /// ==============================
+        /// Candidate - notifications flow
+        /// ==============================   
+        '/notifications': (context) => const NotificationsScreen(),
 
         /// ==============================
         /// Company / Admin

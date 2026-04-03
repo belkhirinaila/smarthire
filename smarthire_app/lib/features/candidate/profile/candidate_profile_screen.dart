@@ -1,40 +1,177 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
-class CandidateProfileScreen extends StatelessWidget {
+class CandidateProfileScreen extends StatefulWidget {
   const CandidateProfileScreen({super.key});
 
+  @override
+  State<CandidateProfileScreen> createState() => _CandidateProfileScreenState();
+}
+
+class _CandidateProfileScreenState extends State<CandidateProfileScreen> {
   static const Color primaryBlue = Color(0xFF1E6CFF);
   static const Color backgroundTop = Color(0xFF08162D);
   static const Color backgroundBottom = Color(0xFF050A12);
   static const Color cardColor = Color(0xFF121C31);
 
+  static const String baseUrl = 'http://192.168.100.47:5000/api';
+
+  Map<String, dynamic>? profile;
+  bool isLoading = true;
+  String? errorMessage;
+  String visibility = 'public';
+
+  @override
+  void initState() {
+    super.initState();
+    fetchProfile();
+  }
+
+  Future<void> fetchProfile() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token');
+
+      if (token == null || token.isEmpty) {
+        setState(() {
+          isLoading = false;
+          errorMessage = "Token introuvable. Veuillez vous reconnecter.";
+        });
+        return;
+      }
+
+      final profileResponse = await http.get(
+        Uri.parse('$baseUrl/candidate-profile/me'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      final visibilityResponse = await http.get(
+        Uri.parse('$baseUrl/visibility/me'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      final profileData = jsonDecode(profileResponse.body);
+
+      String fetchedVisibility = 'public';
+      if (visibilityResponse.statusCode == 200) {
+        final visibilityData = jsonDecode(visibilityResponse.body);
+        fetchedVisibility =
+            (visibilityData['visibility']?['visibility'] ?? 'public')
+                .toString();
+      }
+
+      if (profileResponse.statusCode == 200) {
+        setState(() {
+          profile = profileData['profile'];
+          visibility = fetchedVisibility;
+          isLoading = false;
+          errorMessage = null;
+        });
+      } else {
+        setState(() {
+          isLoading = false;
+          errorMessage =
+              profileData['message'] ?? 'Erreur lors du chargement du profil';
+        });
+      }
+    } catch (e) {
+      setState(() {
+        isLoading = false;
+        errorMessage = 'Erreur de connexion au serveur';
+      });
+    }
+  }
+
+  String _safeString(dynamic value, {String fallback = ''}) {
+    if (value == null) return fallback;
+    final text = value.toString().trim();
+    if (text.isEmpty) return fallback;
+    return text;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final String fullName = "Candidate Name";
-    final String headline = "Your professional headline";
-    final String location = "Algeria";
-    final String about =
-        "Tell recruiters about your profile, your goals and your strengths. This section will be connected later to backend data.";
+    if (isLoading) {
+      return const Scaffold(
+        backgroundColor: backgroundBottom,
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
 
-    final List<String> skills = [
-      "Skill 1",
-      "Skill 2",
-      "Skill 3",
-      "Skill 4",
-    ];
+    if (errorMessage != null) {
+      return Scaffold(
+        backgroundColor: backgroundBottom,
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  errorMessage!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                ElevatedButton(
+                  onPressed: () {
+                    setState(() {
+                      isLoading = true;
+                      errorMessage = null;
+                    });
+                    fetchProfile();
+                  },
+                  child: const Text("Réessayer"),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
 
-    final List<Map<String, String>> experiences = [
-      {
-        "role": "Position title",
-        "company": "Company name",
-        "period": "2023 - Present",
-      },
-      {
-        "role": "Previous role",
-        "company": "Company name",
-        "period": "2021 - 2023",
-      },
-    ];
+    final bool profileNotCreated = profile == null;
+
+    final String fullName = "Candidate";
+    final String headline = profileNotCreated
+        ? "Complete your profile"
+        : _safeString(
+            profile?['professional_headline'],
+            fallback: "Your professional headline",
+          );
+
+    final String location = profileNotCreated
+        ? "Algeria"
+        : _safeString(
+            profile?['location'],
+            fallback: "Algeria",
+          );
+
+    final String about = profileNotCreated
+        ? "You have not created your candidate profile yet."
+        : _safeString(
+            profile?['bio'],
+            fallback:
+                "Tell recruiters about your profile, your goals and your strengths.",
+          );
+
+    final String githubLink = _safeString(profile?['github_link']);
+    final String behanceLink = _safeString(profile?['behance_link']);
+    final String personalWebsite = _safeString(profile?['personal_website']);
+    final String profilePhoto = _safeString(profile?['profile_photo']);
 
     return Scaffold(
       backgroundColor: backgroundBottom,
@@ -62,21 +199,28 @@ class CandidateProfileScreen extends StatelessWidget {
                         fullName: fullName,
                         headline: headline,
                         location: location,
+                        profilePhoto: profilePhoto,
                       ),
                       const SizedBox(height: 24),
                       _buildQuickActions(context),
                       const SizedBox(height: 24),
+                      if (profileNotCreated) ...[
+                        _buildSectionTitle("Profile Status"),
+                        const SizedBox(height: 12),
+                        _buildEmptyProfileCard(),
+                        const SizedBox(height: 24),
+                      ],
                       _buildSectionTitle("About Me"),
                       const SizedBox(height: 12),
                       _buildAboutCard(about),
                       const SizedBox(height: 24),
-                      _buildSectionTitle("Top Skills"),
+                      _buildSectionTitle("Links"),
                       const SizedBox(height: 12),
-                      _buildSkillsCard(skills),
-                      const SizedBox(height: 24),
-                      _buildSectionTitle("Experience"),
-                      const SizedBox(height: 12),
-                      _buildExperienceCard(experiences),
+                      _buildLinksCard(
+                        githubLink: githubLink,
+                        behanceLink: behanceLink,
+                        personalWebsite: personalWebsite,
+                      ),
                       const SizedBox(height: 24),
                       _buildSectionTitle("Documents"),
                       const SizedBox(height: 12),
@@ -126,6 +270,7 @@ class CandidateProfileScreen extends StatelessWidget {
     required String fullName,
     required String headline,
     required String location,
+    required String profilePhoto,
   }) {
     return Container(
       width: double.infinity,
@@ -145,11 +290,23 @@ class CandidateProfileScreen extends StatelessWidget {
               color: Colors.white.withOpacity(0.08),
               border: Border.all(color: Colors.white.withOpacity(0.06)),
             ),
-            child: const Icon(
-              Icons.person,
-              size: 42,
-              color: Colors.white,
-            ),
+            child: profilePhoto.isNotEmpty
+                ? ClipOval(
+                    child: Image.network(
+                      profilePhoto,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => const Icon(
+                        Icons.person,
+                        size: 42,
+                        color: Colors.white,
+                      ),
+                    ),
+                  )
+                : const Icon(
+                    Icons.person,
+                    size: 42,
+                    color: Colors.white,
+                  ),
           ),
           const SizedBox(height: 16),
           Text(
@@ -180,72 +337,65 @@ class CandidateProfileScreen extends StatelessWidget {
                 size: 18,
               ),
               const SizedBox(width: 6),
-              Text(
-                location,
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.48),
-                  fontSize: 14,
+              Flexible(
+                child: Text(
+                  location,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.48),
+                    fontSize: 14,
+                  ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              Expanded(
-                child: _buildSmallStat(
-                  title: "Applications",
-                  value: "00",
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildSmallStat(
-                  title: "Saved Jobs",
-                  value: "00",
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildSmallStat(
-                  title: "Requests",
-                  value: "00",
-                ),
-              ),
-            ],
-          ),
+          const SizedBox(height: 10),
+          _buildVisibilityBadge(),
         ],
       ),
     );
   }
 
-  Widget _buildSmallStat({
-    required String title,
-    required String value,
-  }) {
+  Widget _buildVisibilityBadge() {
+    Color color;
+    IconData icon;
+    String label;
+
+    switch (visibility) {
+      case 'private':
+        color = Colors.redAccent;
+        icon = Icons.lock_outline_rounded;
+        label = 'Private';
+        break;
+      case 'selective':
+        color = Colors.orangeAccent;
+        icon = Icons.group_outlined;
+        label = 'Selective';
+        break;
+      default:
+        color = Colors.greenAccent;
+        icon = Icons.public_rounded;
+        label = 'Public';
+    }
+
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(18),
+        color: color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withOpacity(0.30)),
       ),
-      child: Column(
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 6),
           Text(
-            value,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            title,
-            textAlign: TextAlign.center,
+            label,
             style: TextStyle(
-              color: Colors.white.withOpacity(0.5),
-              fontSize: 12,
+              color: color,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
             ),
           ),
         ],
@@ -262,8 +412,17 @@ class CandidateProfileScreen extends StatelessWidget {
               child: _buildActionButton(
                 icon: Icons.edit_outlined,
                 label: "Edit Profile",
-                onTap: () {
-                  Navigator.pushNamed(context, '/edit-profile');
+                onTap: () async {
+                  final result =
+                      await Navigator.pushNamed(context, '/edit-profile');
+
+                  if (result == true) {
+                    setState(() {
+                      isLoading = true;
+                      errorMessage = null;
+                    });
+                    await fetchProfile();
+                  }
                 },
               ),
             ),
@@ -272,8 +431,17 @@ class CandidateProfileScreen extends StatelessWidget {
               child: _buildActionButton(
                 icon: Icons.description_outlined,
                 label: "CV & Skills",
-                onTap: () {
-                  Navigator.pushNamed(context, '/cv-skills');
+                onTap: () async {
+                  final result =
+                      await Navigator.pushNamed(context, '/cv-skills');
+
+                  if (result == true) {
+                    setState(() {
+                      isLoading = true;
+                      errorMessage = null;
+                    });
+                    await fetchProfile();
+                  }
                 },
               ),
             ),
@@ -286,8 +454,19 @@ class CandidateProfileScreen extends StatelessWidget {
               child: _buildActionButton(
                 icon: Icons.work_outline_rounded,
                 label: "Experience & Education",
-                onTap: () {
-                  Navigator.pushNamed(context, '/experience-education');
+                onTap: () async {
+                  final result = await Navigator.pushNamed(
+                    context,
+                    '/experience-education',
+                  );
+
+                  if (result == true) {
+                    setState(() {
+                      isLoading = true;
+                      errorMessage = null;
+                    });
+                    await fetchProfile();
+                  }
                 },
               ),
             ),
@@ -296,10 +475,37 @@ class CandidateProfileScreen extends StatelessWidget {
               child: _buildActionButton(
                 icon: Icons.visibility_outlined,
                 label: "Privacy & Visibility",
-                onTap: () {
-                  Navigator.pushNamed(context, '/privacy-visibility');
+                onTap: () async {
+                  final result =
+                      await Navigator.pushNamed(context, '/privacy-visibility');
+
+                  if (result == true) {
+                    setState(() {
+                      isLoading = true;
+                      errorMessage = null;
+                    });
+                    await fetchProfile();
+                  }
                 },
               ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _buildActionButton(
+                icon: Icons.bookmark_outline_rounded,
+                label: "Saved Jobs",
+                onTap: () {
+                  Navigator.pushNamed(context, '/saved-jobs');
+                },
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: SizedBox(),
             ),
           ],
         ),
@@ -353,6 +559,26 @@ class CandidateProfileScreen extends StatelessWidget {
     );
   }
 
+  Widget _buildEmptyProfileCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: Colors.white.withOpacity(0.04)),
+      ),
+      child: Text(
+        "Profil non encore créé. Tu peux le compléter depuis Edit Profile.",
+        style: TextStyle(
+          color: Colors.white.withOpacity(0.72),
+          fontSize: 15,
+          height: 1.6,
+        ),
+      ),
+    );
+  }
+
   Widget _buildAboutCard(String about) {
     return Container(
       width: double.infinity,
@@ -373,40 +599,17 @@ class CandidateProfileScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildSkillsCard(List<String> skills) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: Colors.white.withOpacity(0.04)),
-      ),
-      child: Wrap(
-        spacing: 10,
-        runSpacing: 10,
-        children: skills.map((skill) {
-          return Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-            decoration: BoxDecoration(
-              color: primaryBlue.withOpacity(0.16),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Text(
-              skill,
-              style: const TextStyle(
-                color: primaryBlue,
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
+  Widget _buildLinksCard({
+    required String githubLink,
+    required String behanceLink,
+    required String personalWebsite,
+  }) {
+    final links = [
+      {"label": "GitHub", "value": githubLink},
+      {"label": "Behance", "value": behanceLink},
+      {"label": "Website", "value": personalWebsite},
+    ];
 
-  Widget _buildExperienceCard(List<Map<String, String>> experiences) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
@@ -416,55 +619,31 @@ class CandidateProfileScreen extends StatelessWidget {
         border: Border.all(color: Colors.white.withOpacity(0.04)),
       ),
       child: Column(
-        children: experiences.map((item) {
+        children: links.map((item) {
+          final value = item["value"] ?? "";
           return Padding(
-            padding: const EdgeInsets.only(bottom: 16),
+            padding: const EdgeInsets.only(bottom: 12),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.06),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: const Icon(
-                    Icons.work_outline_rounded,
-                    color: Colors.white70,
-                    size: 20,
+                SizedBox(
+                  width: 80,
+                  child: Text(
+                    item["label"] ?? "",
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.55),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
-                const SizedBox(width: 14),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        item["role"] ?? "",
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        item["company"] ?? "",
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.56),
-                          fontSize: 14,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        item["period"] ?? "",
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.42),
-                          fontSize: 13,
-                        ),
-                      ),
-                    ],
+                  child: Text(
+                    value.isEmpty ? "Not added yet" : value,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                    ),
                   ),
                 ),
               ],

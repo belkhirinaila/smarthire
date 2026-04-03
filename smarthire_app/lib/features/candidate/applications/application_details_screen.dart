@@ -15,22 +15,41 @@ class ApplicationDetailsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     /// ==============================
     /// Données reçues depuis la liste
-    /// Si rien n'est envoyé, on met des valeurs visuelles temporaires
     /// ==============================
     final args =
         ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
 
     final String title = args?['title'] ?? "Job title";
-    final String company = args?['company'] ?? "Company name";
+    final String company =
+        args?['company'] ?? args?['company_name'] ?? "Company name";
     final String location = args?['location'] ?? "Location";
-    final String status = args?['status'] ?? "UNDER REVIEW";
-    final String date = args?['date'] ?? "Applied recently";
-    final Color statusColor = args?['statusColor'] ?? primaryBlue;
+
+    final String status =
+        (args?['status'] ?? "pending").toString().toUpperCase();
+
+    final String date = args?['created_at'] != null
+        ? "Applied on ${args!['created_at'].toString().substring(0, 10)}"
+        : (args?['date'] ?? "Applied recently");
+
+    Color getStatusColor(String statusValue) {
+      switch (statusValue.toLowerCase()) {
+        case 'accepted':
+          return const Color(0xFF22C55E);
+        case 'rejected':
+          return const Color(0xFFFF5A6E);
+        case 'pending':
+          return const Color(0xFFFFB020);
+        default:
+          return primaryBlue;
+      }
+    }
+
+    final Color statusColor = getStatusColor(args?['status'] ?? "pending");
 
     /// Message temporaire
     final String candidateMessage =
         args?['message'] ??
-            "I am very interested in this opportunity and I believe my profile matches the role requirements.";
+            "Your application has been submitted successfully. The recruiter will review your profile and update you soon.";
 
     /// Nom temporaire du CV
     final String cvName = args?['cvName'] ?? "resume_candidate.pdf";
@@ -93,7 +112,7 @@ class ApplicationDetailsScreen extends StatelessWidget {
 
                       const SizedBox(height: 12),
 
-                      _buildTimelineCard(statusColor),
+                      _buildTimelineCard(statusColor, status),
 
                       const SizedBox(height: 28),
                     ],
@@ -355,7 +374,11 @@ class ApplicationDetailsScreen extends StatelessWidget {
   /// ==============================
   /// Timeline simple
   /// ==============================
-  Widget _buildTimelineCard(Color statusColor) {
+  Widget _buildTimelineCard(Color statusColor, String status) {
+    final bool isAccepted = status.toLowerCase() == "accepted";
+    final bool isRejected = status.toLowerCase() == "rejected";
+    final bool isPending = status.toLowerCase() == "pending";
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
@@ -371,20 +394,33 @@ class ApplicationDetailsScreen extends StatelessWidget {
             subtitle: "Your application was sent successfully.",
             isDone: true,
             color: const Color(0xFF22C55E),
+            showLine: true,
           ),
           const SizedBox(height: 18),
           _buildTimelineItem(
-            title: "Under Review",
-            subtitle: "Recruiter is reviewing your application.",
+            title: isPending
+                ? "Under Review"
+                : isAccepted
+                    ? "Accepted by Recruiter"
+                    : "Rejected by Recruiter",
+            subtitle: isPending
+                ? "Recruiter is reviewing your application."
+                : isAccepted
+                    ? "Congratulations! Your application has been accepted."
+                    : "Your application was not selected for this position.",
             isDone: true,
             color: statusColor,
+            showLine: true,
           ),
           const SizedBox(height: 18),
           _buildTimelineItem(
-            title: "Interview / Final Decision",
-            subtitle: "Next update will appear here.",
-            isDone: false,
-            color: Colors.white24,
+            title: "Next Update",
+            subtitle: isPending
+                ? "You will be notified when the recruiter updates your status."
+                : "This application has reached its current final stage.",
+            isDone: !isPending,
+            color: isPending ? Colors.white24 : statusColor,
+            showLine: false,
           ),
         ],
       ),
@@ -399,6 +435,7 @@ class ApplicationDetailsScreen extends StatelessWidget {
     required String subtitle,
     required bool isDone,
     required Color color,
+    required bool showLine,
   }) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -419,11 +456,12 @@ class ApplicationDetailsScreen extends StatelessWidget {
                 size: isDone ? 14 : 8,
               ),
             ),
-            Container(
-              width: 2,
-              height: 42,
-              color: Colors.white.withOpacity(0.08),
-            ),
+            if (showLine)
+              Container(
+                width: 2,
+                height: 42,
+                color: Colors.white.withOpacity(0.08),
+              ),
           ],
         ),
         const SizedBox(width: 14),

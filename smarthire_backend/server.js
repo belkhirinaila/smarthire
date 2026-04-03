@@ -18,6 +18,7 @@ const portfolioRoutes = require("./routes/portfolio");
 const savedJobsRoutes = require("./routes/savedJobs");
 const messagesRoutes = require("./routes/messages");
 const requestRoutes = require("./routes/requests");
+const notificationsRoutes = require("./routes/notifications");
 
 const app = express();
 
@@ -47,6 +48,7 @@ app.use("/api/portfolio", portfolioRoutes);
 app.use("/api/saved-jobs", savedJobsRoutes);
 app.use("/api/messages", messagesRoutes);
 app.use("/api/requests", requestRoutes);
+app.use("/api/notifications", notificationsRoutes);
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, "0.0.0.0", () => {

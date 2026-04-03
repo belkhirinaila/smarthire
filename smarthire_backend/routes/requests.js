@@ -7,12 +7,23 @@ const { protect } = require("../middleware/authMiddleware");
 router.post("/", protect, async (req, res) => {
   try {
     const { candidate_id } = req.body;
-
     const recruiter_id = req.user.id;
 
     await db.query(
       "INSERT INTO access_requests (recruiter_id, candidate_id) VALUES (?, ?)",
       [recruiter_id, candidate_id]
+    );
+
+    // notif للcandidate
+    await db.query(
+      `INSERT INTO notifications (user_id, title, message, type)
+       VALUES (?, ?, ?, ?)`,
+      [
+        candidate_id,
+        "New recruiter request",
+        "A recruiter sent you a request.",
+        "request"
+      ]
     );
 
     res.status(201).json({ message: "Request envoyée" });
@@ -72,7 +83,6 @@ router.put("/:id", protect, async (req, res) => {
       return res.status(400).json({ message: "Statut invalide" });
     }
 
-    // check ownership
     const [rows] = await db.query(
       "SELECT * FROM access_requests WHERE id = ? AND candidate_id = ?",
       [id, req.user.id]
@@ -82,9 +92,23 @@ router.put("/:id", protect, async (req, res) => {
       return res.status(404).json({ message: "Request non trouvée" });
     }
 
+    const request = rows[0];
+
     await db.query(
       "UPDATE access_requests SET status = ? WHERE id = ?",
       [status, id]
+    );
+
+    // notif للrecruiter بعد réponse
+    await db.query(
+      `INSERT INTO notifications (user_id, title, message, type)
+       VALUES (?, ?, ?, ?)`,
+      [
+        request.recruiter_id,
+        "Request updated",
+        `Your access request was ${status}.`,
+        "request"
+      ]
     );
 
     res.json({ message: "Request mise à jour" });

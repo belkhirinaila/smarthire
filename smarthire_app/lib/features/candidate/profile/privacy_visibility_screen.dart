@@ -1,4 +1,7 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 class PrivacyVisibilityScreen extends StatefulWidget {
   const PrivacyVisibilityScreen({super.key});
@@ -9,32 +12,193 @@ class PrivacyVisibilityScreen extends StatefulWidget {
 }
 
 class _PrivacyVisibilityScreenState extends State<PrivacyVisibilityScreen> {
-  /// ==============================
-  /// Couleurs principales
-  /// ==============================
   static const Color primaryBlue = Color(0xFF1E6CFF);
   static const Color backgroundTop = Color(0xFF08162D);
   static const Color backgroundBottom = Color(0xFF050A12);
   static const Color cardColor = Color(0xFF121C31);
 
-  /// ==============================
-  /// Etats des options
-  /// Plus tard: ces valeurs viendront du backend
-  /// ==============================
-  bool isProfilePublic = true;
-  bool showEmail = false;
-  bool showPhone = false;
-  bool allowRecruiterContact = true;
-  bool openToOpportunities = true;
-  bool jobAlertsEnabled = true;
-  bool requestNotificationsEnabled = true;
-  bool messageNotificationsEnabled = true;
+  static const String baseUrl = 'http://192.168.100.47:5000/api';
 
-  /// Etat loading du bouton save
+  bool isLoading = true;
   bool isSaving = false;
+  String? errorMessage;
+
+  String selectedVisibility = 'public';
+
+  @override
+  void initState() {
+    super.initState();
+    fetchVisibility();
+  }
+
+  Future<String?> _getToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('token');
+  }
+
+  Future<void> fetchVisibility() async {
+    try {
+      final token = await _getToken();
+
+      if (token == null || token.isEmpty) {
+        setState(() {
+          isLoading = false;
+          errorMessage = "Token introuvable. Veuillez vous reconnecter.";
+        });
+        return;
+      }
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/visibility/me'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        setState(() {
+          selectedVisibility =
+              (data['visibility']?['visibility'] ?? 'public').toString();
+          isLoading = false;
+          errorMessage = null;
+        });
+      } else {
+        setState(() {
+          isLoading = false;
+          errorMessage =
+              data['message'] ?? "Erreur lors du chargement de la visibilité";
+        });
+      }
+    } catch (e) {
+      setState(() {
+        isLoading = false;
+        errorMessage = "Erreur de connexion au serveur";
+      });
+    }
+  }
+
+  Future<void> saveVisibility() async {
+    try {
+      setState(() {
+        isSaving = true;
+      });
+
+      final token = await _getToken();
+
+      if (token == null || token.isEmpty) {
+        setState(() {
+          isSaving = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Token introuvable. Veuillez vous reconnecter."),
+          ),
+        );
+        return;
+      }
+
+      final response = await http.put(
+        Uri.parse('$baseUrl/visibility'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'visibility': selectedVisibility,
+        }),
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (!mounted) return;
+
+      setState(() {
+        isSaving = false;
+      });
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              data['message'] ?? 'Visibility mise à jour avec succès',
+            ),
+          ),
+        );
+
+        Navigator.pop(context, true);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              data['message'] ?? "Erreur lors de l'enregistrement",
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        isSaving = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Erreur de connexion au serveur"),
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (isLoading) {
+      return const Scaffold(
+        backgroundColor: backgroundBottom,
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (errorMessage != null) {
+      return Scaffold(
+        backgroundColor: backgroundBottom,
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  errorMessage!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                ElevatedButton(
+                  onPressed: () {
+                    setState(() {
+                      isLoading = true;
+                      errorMessage = null;
+                    });
+                    fetchVisibility();
+                  },
+                  child: const Text("Réessayer"),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: backgroundBottom,
       body: Container(
@@ -56,36 +220,12 @@ class _PrivacyVisibilityScreenState extends State<PrivacyVisibilityScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _buildTopBar(context),
-
                       const SizedBox(height: 24),
-
                       _buildSectionTitle("Profile Visibility"),
                       const SizedBox(height: 12),
                       _buildVisibilityCard(),
-
                       const SizedBox(height: 24),
-
-                      _buildSectionTitle("Contact Preferences"),
-                      const SizedBox(height: 12),
-                      _buildContactCard(),
-
-                      const SizedBox(height: 24),
-
-                      _buildSectionTitle("Opportunities"),
-                      const SizedBox(height: 12),
-                      _buildOpportunitiesCard(),
-
-                      const SizedBox(height: 24),
-
-                      _buildSectionTitle("Notifications"),
-                      const SizedBox(height: 12),
-                      _buildNotificationsCard(),
-
-                      const SizedBox(height: 24),
-
                       _buildInfoCard(),
-
-                      const SizedBox(height: 24),
                     ],
                   ),
                 ),
@@ -94,10 +234,6 @@ class _PrivacyVisibilityScreenState extends State<PrivacyVisibilityScreen> {
           ),
         ),
       ),
-
-      /// ==============================
-      /// Bouton fixe en bas
-      /// ==============================
       bottomNavigationBar: Container(
         color: backgroundBottom,
         child: SafeArea(
@@ -108,9 +244,6 @@ class _PrivacyVisibilityScreenState extends State<PrivacyVisibilityScreen> {
     );
   }
 
-  /// ==============================
-  /// Barre supérieure
-  /// ==============================
   Widget _buildTopBar(BuildContext context) {
     return Row(
       children: [
@@ -146,9 +279,6 @@ class _PrivacyVisibilityScreenState extends State<PrivacyVisibilityScreen> {
     );
   }
 
-  /// ==============================
-  /// Titre section
-  /// ==============================
   Widget _buildSectionTitle(String title) {
     return Text(
       title,
@@ -160,9 +290,6 @@ class _PrivacyVisibilityScreenState extends State<PrivacyVisibilityScreen> {
     );
   }
 
-  /// ==============================
-  /// Carte visibilité profil
-  /// ==============================
   Widget _buildVisibilityCard() {
     return Container(
       width: double.infinity,
@@ -174,163 +301,109 @@ class _PrivacyVisibilityScreenState extends State<PrivacyVisibilityScreen> {
       ),
       child: Column(
         children: [
-          _buildSwitchTile(
+          _buildVisibilityOption(
             icon: Icons.public_rounded,
-            title: "Public Profile",
-            subtitle: "Allow your profile to be visible in the platform.",
-            value: isProfilePublic,
-            onChanged: (value) {
-              setState(() {
-                isProfilePublic = value;
-              });
-            },
+            title: "Public",
+            subtitle: "Your profile can be visible to recruiters on the platform.",
+            value: 'public',
           ),
           const SizedBox(height: 12),
-          _buildSwitchTile(
-            icon: Icons.email_outlined,
-            title: "Show Email",
-            subtitle: "Display your email on your public profile.",
-            value: showEmail,
-            onChanged: (value) {
-              setState(() {
-                showEmail = value;
-              });
-            },
+          _buildVisibilityOption(
+            icon: Icons.lock_outline_rounded,
+            title: "Private",
+            subtitle: "Your profile stays hidden and recruiters cannot browse it.",
+            value: 'private',
           ),
-          const SizedBox(height: 12),
-          _buildSwitchTile(
-            icon: Icons.phone_outlined,
-            title: "Show Phone Number",
-            subtitle: "Display your phone number on your profile.",
-            value: showPhone,
-            onChanged: (value) {
-              setState(() {
-                showPhone = value;
-              });
-            },
-          ),
+          
         ],
       ),
     );
   }
 
-  /// ==============================
-  /// Carte préférences de contact
-  /// ==============================
-  Widget _buildContactCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withOpacity(0.04)),
-      ),
-      child: Column(
-        children: [
-          _buildSwitchTile(
-            icon: Icons.mark_email_read_outlined,
-            title: "Allow Recruiter Contact",
-            subtitle: "Recruiters can contact you directly from the platform.",
-            value: allowRecruiterContact,
-            onChanged: (value) {
-              setState(() {
-                allowRecruiterContact = value;
-              });
-            },
+  Widget _buildVisibilityOption({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required String value,
+  }) {
+    final bool isSelected = selectedVisibility == value;
+
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          selectedVisibility = value;
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? primaryBlue.withOpacity(0.10)
+              : Colors.white.withOpacity(0.04),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: isSelected
+                ? primaryBlue.withOpacity(0.45)
+                : Colors.white.withOpacity(0.05),
           ),
-        ],
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(
+                icon,
+                color: primaryBlue,
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.55),
+                        fontSize: 13,
+                        height: 1.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Icon(
+              isSelected
+                  ? Icons.radio_button_checked_rounded
+                  : Icons.radio_button_off_rounded,
+              color: isSelected ? primaryBlue : Colors.white38,
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  /// ==============================
-  /// Carte opportunités
-  /// ==============================
-  Widget _buildOpportunitiesCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withOpacity(0.04)),
-      ),
-      child: Column(
-        children: [
-          _buildSwitchTile(
-            icon: Icons.work_outline_rounded,
-            title: "Open to Opportunities",
-            subtitle: "Show recruiters that you are open to new roles.",
-            value: openToOpportunities,
-            onChanged: (value) {
-              setState(() {
-                openToOpportunities = value;
-              });
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// ==============================
-  /// Carte notifications
-  /// ==============================
-  Widget _buildNotificationsCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withOpacity(0.04)),
-      ),
-      child: Column(
-        children: [
-          _buildSwitchTile(
-            icon: Icons.notifications_active_outlined,
-            title: "Job Alerts",
-            subtitle: "Receive notifications for matching job offers.",
-            value: jobAlertsEnabled,
-            onChanged: (value) {
-              setState(() {
-                jobAlertsEnabled = value;
-              });
-            },
-          ),
-          const SizedBox(height: 12),
-          _buildSwitchTile(
-            icon: Icons.inventory_2_outlined,
-            title: "Request Notifications",
-            subtitle: "Receive updates about recruiter requests.",
-            value: requestNotificationsEnabled,
-            onChanged: (value) {
-              setState(() {
-                requestNotificationsEnabled = value;
-              });
-            },
-          ),
-          const SizedBox(height: 12),
-          _buildSwitchTile(
-            icon: Icons.chat_bubble_outline_rounded,
-            title: "Message Notifications",
-            subtitle: "Receive alerts when you get new messages.",
-            value: messageNotificationsEnabled,
-            onChanged: (value) {
-              setState(() {
-                messageNotificationsEnabled = value;
-              });
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// ==============================
-  /// Carte info
-  /// ==============================
   Widget _buildInfoCard() {
     return Container(
       width: double.infinity,
@@ -351,7 +424,7 @@ class _PrivacyVisibilityScreenState extends State<PrivacyVisibilityScreen> {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              "These settings are currently local on the app interface. Later, they will be connected to backend preferences and stored in the database.",
+              "Choose how visible your profile is for recruiters. This setting is connected to your backend visibility preference.",
               style: TextStyle(
                 color: Colors.white.withOpacity(0.78),
                 fontSize: 14,
@@ -364,83 +437,6 @@ class _PrivacyVisibilityScreenState extends State<PrivacyVisibilityScreen> {
     );
   }
 
-  /// ==============================
-  /// Switch tile réutilisable
-  /// ==============================
-  Widget _buildSwitchTile({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required bool value,
-    required ValueChanged<bool> onChanged,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.04),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.05),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Icon(
-              icon,
-              color: primaryBlue,
-              size: 22,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.55),
-                      fontSize: 13,
-                      height: 1.5,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Switch(
-            value: value,
-            onChanged: onChanged,
-            activeColor: primaryBlue,
-            activeTrackColor: primaryBlue.withOpacity(0.45),
-            inactiveThumbColor: Colors.white70,
-            inactiveTrackColor: Colors.white24,
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// ==============================
-  /// Bouton save
-  /// ==============================
   Widget _buildBottomButton() {
     return Container(
       color: backgroundBottom,
@@ -448,7 +444,7 @@ class _PrivacyVisibilityScreenState extends State<PrivacyVisibilityScreen> {
       child: SizedBox(
         height: 58,
         child: ElevatedButton(
-          onPressed: isSaving ? null : _savePrivacySettings,
+          onPressed: isSaving ? null : saveVisibility,
           style: ElevatedButton.styleFrom(
             backgroundColor: primaryBlue,
             foregroundColor: Colors.white,
@@ -477,31 +473,5 @@ class _PrivacyVisibilityScreenState extends State<PrivacyVisibilityScreen> {
         ),
       ),
     );
-  }
-
-  /// ==============================
-  /// Save temporaire
-  /// Plus tard: appel backend
-  /// ==============================
-  void _savePrivacySettings() async {
-    setState(() {
-      isSaving = true;
-    });
-
-    await Future.delayed(const Duration(seconds: 1));
-
-    if (!mounted) return;
-
-    setState(() {
-      isSaving = false;
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text("Privacy and visibility settings updated successfully"),
-      ),
-    );
-
-    Navigator.pop(context);
   }
 }

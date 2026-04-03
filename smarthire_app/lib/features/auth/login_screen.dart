@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -12,7 +13,13 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   static const Color primaryBlue = Color(0xFF1E6CFF);
 
+  /// ==============================
+  /// Base URL API
+  /// ==============================
+  static const String baseUrl = 'http://192.168.100.47:5000/api';
+
   bool _obscure = true;
+  bool isLoading = false;
 
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
@@ -25,11 +32,6 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> loginUser() async {
-    debugPrint("login button clicked");
-    
-    debugPrint("email: ${emailController.text.trim()}");
-    
-    debugPrint("password: ${passwordController.text.trim()}");
     final email = emailController.text.trim();
     final password = passwordController.text.trim();
 
@@ -40,29 +42,57 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
+    setState(() {
+      isLoading = true;
+    });
+
     try {
       final response = await http.post(
-        Uri.parse("http://127.0.0.1:5000/api/auth/login"),
+        Uri.parse('$baseUrl/auth/login'),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
           "email": email,
           "password": password,
         }),
       );
-      debugPrint("status code: ${response.statusCode}");
-      debugPrint("response body: ${response.body}");
 
       final data = jsonDecode(response.body);
+
       if (!mounted) return;
 
+      setState(() {
+        isLoading = false;
+      });
+
       if (response.statusCode == 200) {
-        debugPrint("STATUS: ${response.statusCode}");
-        debugPrint("BODY: ${response.body}");
-        final role = data['user']['role'];
+        /// ==============================
+        /// Sauvegarde du token + infos user
+        /// ==============================
+        final prefs = await SharedPreferences.getInstance();
+
+        final String? token = data['token'];
+        final String? role = data['user']?['role'];
+        final dynamic userId = data['user']?['id'];
+
+        if (token != null && token.isNotEmpty) {
+          await prefs.setString('token', token);
+        }
+
+        if (role != null) {
+          await prefs.setString('role', role);
+        }
+
+        if (userId != null) {
+          await prefs.setString('user_id', userId.toString());
+        }
+
+        /// Debug temporaire
+        debugPrint("TOKEN SAVED: ${prefs.getString('token')}");
+        debugPrint("ROLE SAVED: ${prefs.getString('role')}");
 
         if (role == "candidate") {
           Navigator.pushReplacementNamed(context, '/candidate');
-        } else if (role == "company") {
+        } else if (role == "company" || role == "recruiter") {
           Navigator.pushReplacementNamed(context, '/company');
         } else if (role == "admin") {
           Navigator.pushReplacementNamed(context, '/admin');
@@ -75,9 +105,15 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
     } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        isLoading = false;
+      });
+
       debugPrint("catch error: $e");
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Erreur serveur")),
+        SnackBar(content: Text("Erreur serveur: $e")),
       );
     }
   }
@@ -227,7 +263,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         width: double.infinity,
                         height: 56,
                         child: ElevatedButton(
-                          onPressed: loginUser,
+                          onPressed: isLoading ? null : loginUser,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: primaryBlue,
                             foregroundColor: Colors.white,
@@ -236,20 +272,29 @@ class _LoginScreenState extends State<LoginScreen> {
                               borderRadius: BorderRadius.circular(18),
                             ),
                           ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: const [
-                              Text(
-                                "Sign In",
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w800,
+                          child: isLoading
+                              ? const SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2.5,
+                                  ),
+                                )
+                              : Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: const [
+                                    Text(
+                                      "Sign In",
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                    SizedBox(width: 10),
+                                    Icon(Icons.login_rounded),
+                                  ],
                                 ),
-                              ),
-                              SizedBox(width: 10),
-                              Icon(Icons.login_rounded),
-                            ],
-                          ),
                         ),
                       ),
                     ],
@@ -361,7 +406,8 @@ class _Input extends StatelessWidget {
         hintStyle: TextStyle(color: Colors.white.withOpacity(0.25)),
         filled: true,
         fillColor: Colors.black.withOpacity(0.12),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
         prefixIcon: Icon(prefix, color: Colors.white.withOpacity(0.55)),
         suffixIcon: suffix == null
             ? null
