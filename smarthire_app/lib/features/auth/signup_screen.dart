@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+// Ecran d'inscription permettant à l'utilisateur de créer un nouveau compte.
+// Il recueille le nom complet, l'email, le mot de passe et l'acceptation des conditions.
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
 
@@ -8,16 +10,22 @@ class SignupScreen extends StatefulWidget {
 }
 
 class _SignupScreenState extends State<SignupScreen> {
+  // Couleur principale utilisée pour les éléments interactifs.
   static const Color primaryBlue = Color(0xFF1E6CFF);
 
+  // Contrôleurs pour récupérer le texte saisi dans chaque champ du formulaire.
   final TextEditingController nameController = TextEditingController();
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
 
+  // Etat indiquant si l'utilisateur a accepté les termes et conditions.
   bool agreeTerms = false;
+
+  // Etat pour masquer ou afficher le mot de passe.
   bool obscurePassword = true;
 
   @override
+  // Libération des ressources des controllers lorsque le widget est détruit.
   void dispose() {
     nameController.dispose();
     emailController.dispose();
@@ -25,11 +33,15 @@ class _SignupScreenState extends State<SignupScreen> {
     super.dispose();
   }
 
+  // Fonction appelée lorsque l'utilisateur valide le formulaire.
+  // Elle vérifie les champs, s'assure que les conditions sont acceptées,
+  // puis navigue vers l'écran de choix de rôle.
   void goToRoleScreen() {
     final fullName = nameController.text.trim();
     final email = emailController.text.trim();
     final password = passwordController.text.trim();
 
+    // Validation côté client : tous les champs doivent être remplis.
     if (fullName.isEmpty || email.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Remplis tous les champs")),
@@ -37,6 +49,7 @@ class _SignupScreenState extends State<SignupScreen> {
       return;
     }
 
+    // L'utilisateur doit accepter les termes et conditions avant de continuer.
     if (!agreeTerms) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -46,6 +59,7 @@ class _SignupScreenState extends State<SignupScreen> {
       return;
     }
 
+    // Navigation vers l'écran de sélection de rôle après validation du formulaire.
     Navigator.pushNamed(
       context,
       '/role',
@@ -59,6 +73,7 @@ class _SignupScreenState extends State<SignupScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Construction de l'interface du formulaire d'inscription.
     return Scaffold(
       body: Container(
         width: double.infinity,
@@ -104,6 +119,7 @@ class _SignupScreenState extends State<SignupScreen> {
 
                 const SizedBox(height: 18),
 
+                // Titre principal de la page d'inscription.
                 const Text(
                   "Create Account",
                   style: TextStyle(
@@ -126,11 +142,13 @@ class _SignupScreenState extends State<SignupScreen> {
 
                 const SizedBox(height: 28),
 
+                // Étiquette pour le champ du nom complet.
                 const Text(
                   "Full Name",
                   style: TextStyle(color: Colors.white70),
                 ),
                 const SizedBox(height: 10),
+                // Champ de saisie du nom complet.
                 _inputField(
                   "Enter your full name",
                   controller: nameController,
@@ -138,11 +156,13 @@ class _SignupScreenState extends State<SignupScreen> {
 
                 const SizedBox(height: 20),
 
+                // Étiquette pour le champ de l'adresse email.
                 const Text(
                   "Email Address",
                   style: TextStyle(color: Colors.white70),
                 ),
                 const SizedBox(height: 10),
+                // Champ de saisie de l'email.
                 _inputField(
                   "name@example.dz",
                   controller: emailController,
@@ -150,11 +170,13 @@ class _SignupScreenState extends State<SignupScreen> {
 
                 const SizedBox(height: 20),
 
+                // Étiquette pour le champ du mot de passe.
                 const Text(
                   "Password",
                   style: TextStyle(color: Colors.white70),
                 ),
                 const SizedBox(height: 10),
+                // Champ de saisie du mot de passe avec option de visibilité.
                 _inputField(
                   "Create a password",
                   isPassword: true,
@@ -169,6 +191,7 @@ class _SignupScreenState extends State<SignupScreen> {
 
                 const SizedBox(height: 18),
 
+                // Bloc de case à cocher pour accepter les termes et conditions.
                 Row(
                   children: [
                     Checkbox(
@@ -216,6 +239,8 @@ class _SignupScreenState extends State<SignupScreen> {
 
                 const SizedBox(height: 18),
 
+                // Bouton principal qui lance la validation du formulaire
+                // puis la navigation vers l'étape suivante.
                 SizedBox(
                   width: double.infinity,
                   height: 56,
@@ -267,7 +292,9 @@ class _SignupScreenState extends State<SignupScreen> {
                 ),
 
                 const SizedBox(height: 20),
-
+                // Séparateur puis options de connexion sociale.
+                // Ces boutons sont affichés à titre esthétique et peuvent
+                // être connectés à des services externes si nécessaire.
                 Row(
                   children: [
                     Expanded(
@@ -282,6 +309,7 @@ class _SignupScreenState extends State<SignupScreen> {
 
                 const SizedBox(height: 28),
 
+                // Lien informatif vers la page de connexion existante.
                 Center(
                   child: RichText(
                     text: TextSpan(
@@ -312,6 +340,8 @@ class _SignupScreenState extends State<SignupScreen> {
     );
   }
 
+  // Widget utilitaire pour créer un champ de saisie stylisé.
+  // Il prend en charge les champs de mot de passe avec icône de visibilité.
   static Widget _inputField(
     String hint, {
     bool isPassword = false,
@@ -330,6 +360,7 @@ class _SignupScreenState extends State<SignupScreen> {
         fillColor: Colors.white.withOpacity(0.06),
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+        // Icône pour basculer l'affichage du mot de passe lorsqu'il s'agit d'un champ sécurisé.
         suffixIcon: isPassword
             ? IconButton(
                 onPressed: onTogglePassword,
@@ -357,6 +388,8 @@ class _SignupScreenState extends State<SignupScreen> {
     );
   }
 
+  // Bouton de style social. Aucune logique d'authentification n'est
+  // encore attachée ici, c'est uniquement un rendu visuel.
   static Widget _socialButton(String text) {
     return Container(
       height: 56,

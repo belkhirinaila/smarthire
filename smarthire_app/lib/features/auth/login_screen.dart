@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+// Écran de connexion principal de l'application.
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -11,6 +12,7 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  // Couleur principale utilisée dans l'interface de connexion.
   static const Color primaryBlue = Color(0xFF1E6CFF);
 
   /// ==============================
@@ -25,16 +27,19 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController passwordController = TextEditingController();
 
   @override
+  // Libération des contrôleurs lorsque le widget est supprimé.
   void dispose() {
     emailController.dispose();
     passwordController.dispose();
     super.dispose();
   }
 
+  // Méthode d'authentification qui valide les champs, appelle l'API et gère la navigation.
   Future<void> loginUser() async {
     final email = emailController.text.trim();
     final password = passwordController.text.trim();
 
+    // Vérification que l'utilisateur a bien renseigné les deux champs.
     if (email.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Remplis tous les champs")),
@@ -119,6 +124,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   @override
+  // Construction de l'interface utilisateur de l'écran de connexion.
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
@@ -138,6 +144,7 @@ class _LoginScreenState extends State<LoginScreen> {
               children: [
                 const SizedBox(height: 20),
 
+                // En-tête avec logo et nom de l'application.
                 Row(
                   children: [
                     Container(
@@ -378,6 +385,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 }
 
+// Widget réutilisable pour un champ de saisie personnalisé.
 class _Input extends StatelessWidget {
   final String hint;
   final IconData prefix;
@@ -432,6 +440,7 @@ class _Input extends StatelessWidget {
   }
 }
 
+// Bouton générique pour les options de connexion sociales.
 class _SocialButton extends StatelessWidget {
   final String label;
   final IconData icon;

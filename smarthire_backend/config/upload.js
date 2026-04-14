@@ -1,29 +1,38 @@
 const multer = require("multer");
 const path = require("path");
 
-// storage config
+// ==============================
+// STORAGE
+// ==============================
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, "uploads/");
   },
   filename: (req, file, cb) => {
-    const uniqueName = Date.now() + path.extname(file.originalname);
-    cb(null, uniqueName);
-  }
+    cb(null, Date.now() + path.extname(file.originalname));
+  },
 });
 
-// filter (only PDF)
+// ==============================
+// FILE FILTER (PDF + IMAGES)
+// ==============================
 const fileFilter = (req, file, cb) => {
-  if (file.mimetype === "application/pdf") {
-    cb(null, true);
+  if (
+    file.mimetype.startsWith("image/") ||
+    file.mimetype === "application/pdf"
+  ) {
+    cb(null, true); // ✅ قبول
   } else {
-    cb(new Error("Only PDF files are allowed"), false);
+    cb(new Error("Only PDF and images are allowed"), false);
   }
 };
 
+// ==============================
+// UPLOAD
+// ==============================
 const upload = multer({
-  storage,
-  fileFilter
+  storage: storage,
+  fileFilter: fileFilter,
 });
 
 module.exports = upload;

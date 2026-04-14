@@ -469,6 +469,31 @@ const login = async (req, res) => {
   }
 };
 
+// ==============================
+// GET CURRENT USER (ME)
+// ==============================
+const getMe = async (req, res) => {
+  try {
+    const [rows] = await db.query(
+      "SELECT id, full_name, email, role FROM users WHERE id = ?",
+      [req.user.id]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.status(200).json({
+      user: rows[0],
+    });
+  } catch (err) {
+    res.status(500).json({
+      message: "Erreur serveur",
+      error: err.message,
+    });
+  }
+};
+
 module.exports = {
   register,
   login,
@@ -477,4 +502,5 @@ module.exports = {
   forgotPassword,
   verifyResetOtp,
   resetPassword,
+  getMe,
 };

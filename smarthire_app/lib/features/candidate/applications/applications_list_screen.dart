@@ -1,8 +1,16 @@
+// Import des bibliothèques nécessaires :
+// - dart:convert pour décoder les réponses JSON du backend.
+// - flutter/material.dart pour construire l'interface utilisateur.
+// - package:http pour communiquer avec l'API.
+// - shared_preferences pour récupérer le token d'authentification local.
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+// Ecran qui affiche la liste des candidatures d'un candidat.
+// Il propose des onglets de filtrage, une recherche textuelle, et des cartes
+// détaillant chaque candidature.
 class ApplicationsListScreen extends StatefulWidget {
   const ApplicationsListScreen({super.key});
 
@@ -11,15 +19,19 @@ class ApplicationsListScreen extends StatefulWidget {
 }
 
 class _ApplicationsListScreenState extends State<ApplicationsListScreen> {
+  // Palette de couleurs utilisée pour l'apparence de l'écran.
   static const Color primaryBlue = Color(0xFF1E6CFF);
   static const Color backgroundTop = Color(0xFF08162D);
   static const Color backgroundBottom = Color(0xFF050A12);
   static const Color cardColor = Color(0xFF121C31);
 
+  // URL de base de l'API utilisée pour charger les candidatures.
   static const String baseUrl = 'http://192.168.100.47:5000/api';
 
+  // Index de l'onglet sélectionné pour filtrer les candidatures.
   int selectedTabIndex = 0;
 
+  // Libellés des onglets de filtrage.
   final List<String> tabs = [
     "All",
     "Active",
@@ -27,29 +39,39 @@ class _ApplicationsListScreenState extends State<ApplicationsListScreen> {
     "Rejected",
   ];
 
+  // Contrôleur pour le champ de recherche textuelle.
   final TextEditingController searchController = TextEditingController();
 
+  // Liste des candidatures récupérées depuis le backend.
   List<dynamic> applications = [];
+  // Indicateur de chargement pendant l'appel API.
   bool isLoading = true;
+  // Message d'erreur affiché en cas de problème de chargement.
   String? errorMessage;
 
   @override
   void initState() {
     super.initState();
+    // Au démarrage de l'écran, on déclenche la récupération des candidatures.
     fetchApplications();
   }
 
   @override
   void dispose() {
+    // Libération des ressources du contrôleur de recherche.
     searchController.dispose();
     super.dispose();
   }
 
+  // Méthode principale pour récupérer les candidatures de l'utilisateur.
+  // Elle charge le token depuis le stockage local, appelle l'API et met à jour
+  // l'état en fonction du résultat.
   Future<void> fetchApplications() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('token');
 
+      // Vérifie que l'utilisateur est bien authentifié avant d'appeler l'API.
       if (token == null || token.isEmpty) {
         setState(() {
           isLoading = false;
@@ -58,6 +80,7 @@ class _ApplicationsListScreenState extends State<ApplicationsListScreen> {
         return;
       }
 
+      // Requête GET vers le point de terminaison des candidatures du candidat.
       final response = await http.get(
         Uri.parse('$baseUrl/applications/me'),
         headers: {
@@ -69,12 +92,15 @@ class _ApplicationsListScreenState extends State<ApplicationsListScreen> {
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 200) {
+        // Si la requête réussit, on stocke les candidatures et on réinitialise
+        // l'état de chargement et d'erreur.
         setState(() {
           applications = data['applications'] ?? [];
           isLoading = false;
           errorMessage = null;
         });
       } else {
+        // En cas d'erreur côté backend, affichage du message renvoyé.
         setState(() {
           isLoading = false;
           errorMessage =
@@ -82,6 +108,7 @@ class _ApplicationsListScreenState extends State<ApplicationsListScreen> {
         });
       }
     } catch (e) {
+      // Gestion des erreurs réseau ou de décodage.
       setState(() {
         isLoading = false;
         errorMessage = "Erreur de connexion au serveur";
@@ -89,6 +116,8 @@ class _ApplicationsListScreenState extends State<ApplicationsListScreen> {
     }
   }
 
+  // Ouvre l'écran de détail d'une candidature lorsque l'utilisateur
+  // appuie sur une carte d'application.
   void openApplicationDetails(Map<String, dynamic> application) {
     Navigator.pushNamed(
       context,
@@ -97,6 +126,7 @@ class _ApplicationsListScreenState extends State<ApplicationsListScreen> {
     );
   }
 
+  // Formatte la date de création de la candidature pour l'affichage.
   String formatDate(dynamic createdAt) {
     if (createdAt == null) return "Applied recently";
 
@@ -107,6 +137,8 @@ class _ApplicationsListScreenState extends State<ApplicationsListScreen> {
     return "Applied recently";
   }
 
+  // Retourne une couleur en fonction du statut de la candidature.
+  // Ces couleurs sont utilisées dans le badge d'état pour améliorer la lisibilité.
   Color getStatusColor(String status) {
     switch (status.toLowerCase()) {
       case 'accepted':
@@ -120,6 +152,7 @@ class _ApplicationsListScreenState extends State<ApplicationsListScreen> {
     }
   }
 
+  // Formatte le texte affiché pour le statut afin d'avoir un libellé uniforme.
   String getDisplayStatus(String status) {
     switch (status.toLowerCase()) {
       case 'accepted':
@@ -133,11 +166,14 @@ class _ApplicationsListScreenState extends State<ApplicationsListScreen> {
     }
   }
 
+  // Getter qui applique les filtres de recherche et d'onglet à la liste
+  // des candidatures récupérées.
   List<dynamic> get filteredApplications {
     List<dynamic> result = List.from(applications);
 
     final query = searchController.text.trim().toLowerCase();
     if (query.isNotEmpty) {
+      // Filtrage en fonction du texte saisi par l'utilisateur.
       result = result.where((application) {
         final title = (application['title'] ?? '').toString().toLowerCase();
         final company =
@@ -152,18 +188,21 @@ class _ApplicationsListScreenState extends State<ApplicationsListScreen> {
     }
 
     if (selectedTabIndex == 1) {
+      // Onglet "Active" : on garde uniquement les candidatures en attente.
       result = result
           .where((application) =>
               (application['status'] ?? '').toString().toLowerCase() ==
               'pending')
           .toList();
     } else if (selectedTabIndex == 2) {
+      // Onglet "Accepted" : on garde uniquement les candidatures acceptées.
       result = result
           .where((application) =>
               (application['status'] ?? '').toString().toLowerCase() ==
               'accepted')
           .toList();
     } else if (selectedTabIndex == 3) {
+      // Onglet "Rejected" : on garde uniquement les candidatures refusées.
       result = result
           .where((application) =>
               (application['status'] ?? '').toString().toLowerCase() ==
@@ -176,6 +215,8 @@ class _ApplicationsListScreenState extends State<ApplicationsListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Structure principale de l'écran : un Scaffold avec un fond dégradé
+    // et un SafeArea pour respecter les zones non-interactives.
     return Scaffold(
       backgroundColor: backgroundBottom,
       body: Container(
@@ -215,6 +256,11 @@ class _ApplicationsListScreenState extends State<ApplicationsListScreen> {
   }
 
   Widget _buildBodyContent() {
+    // Contenu principal de la page : affichage conditionnel selon l'état.
+    // - Chargement pendant l'appel API.
+    // - Erreur si la requête échoue.
+    // - Message vide si aucune candidature ne correspond aux filtres.
+    // - Liste de candidatures sinon.
     if (isLoading) {
       return const Center(
         child: Padding(
@@ -263,6 +309,7 @@ class _ApplicationsListScreenState extends State<ApplicationsListScreen> {
       return _buildEmptyState();
     }
 
+    // Affichage des candidatures filtrées sous forme de liste de cartes.
     return Column(
       children: filteredApplications.map((application) {
         final status = (application["status"] ?? "pending").toString();
@@ -389,6 +436,8 @@ class _ApplicationsListScreenState extends State<ApplicationsListScreen> {
     );
   }
 
+  // Barre supérieure de l'écran contenant l'icône utilisateur, le titre et
+  // l'indicateur de notifications.
   Widget _buildTopBar() {
     return Row(
       children: [
@@ -446,6 +495,8 @@ class _ApplicationsListScreenState extends State<ApplicationsListScreen> {
     );
   }
 
+  // Champ de recherche pour filtrer les candidatures par titre, entreprise
+  // ou localisation. La recherche met à jour l'interface à chaque modification.
   Widget _buildSearchBar() {
     return Container(
       height: 58,
@@ -477,6 +528,8 @@ class _ApplicationsListScreenState extends State<ApplicationsListScreen> {
     );
   }
 
+  // Onglets de filtrage qui permettent de basculer entre toutes les
+  // candidatures, les candidatures en attente, acceptées ou refusées.
   Widget _buildTabs() {
     return SizedBox(
       height: 36,
@@ -525,6 +578,8 @@ class _ApplicationsListScreenState extends State<ApplicationsListScreen> {
     );
   }
 
+  // Petit badge coloré qui indique le statut de la candidature.
+  // Le texte et la couleur varient selon l'état (accepted/rejected/pending).
   Widget _buildStatusBadge({
     required String text,
     required Color color,
@@ -547,6 +602,8 @@ class _ApplicationsListScreenState extends State<ApplicationsListScreen> {
     );
   }
 
+  // Affichage lorsqu'aucune candidature ne correspond aux critères de
+  // recherche ou lorsque la liste est vide.
   Widget _buildEmptyState() {
     return Container(
       width: double.infinity,

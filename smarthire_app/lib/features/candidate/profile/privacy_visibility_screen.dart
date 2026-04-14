@@ -1,8 +1,16 @@
+// Import des packages utilisés dans cet écran :
+// - dart:convert pour décoder les réponses JSON.
+// - flutter/material.dart pour construire l'interface Flutter.
+// - http pour les requêtes réseau vers l'API.
+// - shared_preferences pour récupérer le token d'authentification.
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+// Écran qui permet au candidat de configurer la visibilité de son profil.
+// Il récupère l'état actuel depuis le backend, affiche les options de visibilité,
+// puis enregistre le choix de l'utilisateur.
 class PrivacyVisibilityScreen extends StatefulWidget {
   const PrivacyVisibilityScreen({super.key});
 
@@ -12,34 +20,42 @@ class PrivacyVisibilityScreen extends StatefulWidget {
 }
 
 class _PrivacyVisibilityScreenState extends State<PrivacyVisibilityScreen> {
+  // Couleurs statiques pour l'interface de l'écran.
   static const Color primaryBlue = Color(0xFF1E6CFF);
   static const Color backgroundTop = Color(0xFF08162D);
   static const Color backgroundBottom = Color(0xFF050A12);
   static const Color cardColor = Color(0xFF121C31);
 
+  // URL de base du backend.
   static const String baseUrl = 'http://192.168.100.47:5000/api';
 
+  // États de chargement et de sauvegarde.
   bool isLoading = true;
   bool isSaving = false;
   String? errorMessage;
 
+  // Valeur sélectionnée pour la visibilité du profil.
   String selectedVisibility = 'public';
 
   @override
   void initState() {
     super.initState();
+    // Au chargement du widget, on récupère l'état de visibilité actuel.
     fetchVisibility();
   }
 
+  // Récupère le token d'authentification depuis le stockage local.
   Future<String?> _getToken() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString('token');
   }
 
+  // Charge la configuration de visibilité du profil depuis le backend.
   Future<void> fetchVisibility() async {
     try {
       final token = await _getToken();
 
+      // Si le token est absent, on affiche un message d'erreur.
       if (token == null || token.isEmpty) {
         setState(() {
           isLoading = false;
@@ -48,6 +64,7 @@ class _PrivacyVisibilityScreenState extends State<PrivacyVisibilityScreen> {
         return;
       }
 
+      // Requête GET pour obtenir la visibilité actuelle du profil.
       final response = await http.get(
         Uri.parse('$baseUrl/visibility/me'),
         headers: {
@@ -60,6 +77,7 @@ class _PrivacyVisibilityScreenState extends State<PrivacyVisibilityScreen> {
 
       if (response.statusCode == 200) {
         setState(() {
+          // Lecture de la valeur de visibilité renvoyée par l'API.
           selectedVisibility =
               (data['visibility']?['visibility'] ?? 'public').toString();
           isLoading = false;
@@ -80,6 +98,7 @@ class _PrivacyVisibilityScreenState extends State<PrivacyVisibilityScreen> {
     }
   }
 
+  // Enregistre la visibilité sélectionnée dans le backend.
   Future<void> saveVisibility() async {
     try {
       setState(() {
@@ -100,6 +119,7 @@ class _PrivacyVisibilityScreenState extends State<PrivacyVisibilityScreen> {
         return;
       }
 
+      // Requête PUT pour mettre à jour le paramètre de visibilité.
       final response = await http.put(
         Uri.parse('$baseUrl/visibility'),
         headers: {
@@ -128,6 +148,7 @@ class _PrivacyVisibilityScreenState extends State<PrivacyVisibilityScreen> {
           ),
         );
 
+        // Ferme l'écran et renvoie true pour indiquer une mise à jour réussie.
         Navigator.pop(context, true);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -155,6 +176,7 @@ class _PrivacyVisibilityScreenState extends State<PrivacyVisibilityScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Affiche un loader si les données de visibilité sont en cours de chargement.
     if (isLoading) {
       return const Scaffold(
         backgroundColor: backgroundBottom,
@@ -164,6 +186,7 @@ class _PrivacyVisibilityScreenState extends State<PrivacyVisibilityScreen> {
       );
     }
 
+    // Affiche un écran d'erreur si le chargement a échoué.
     if (errorMessage != null) {
       return Scaffold(
         backgroundColor: backgroundBottom,
@@ -199,6 +222,7 @@ class _PrivacyVisibilityScreenState extends State<PrivacyVisibilityScreen> {
       );
     }
 
+    // Affiche l'interface principale lorsque les données sont prêtes.
     return Scaffold(
       backgroundColor: backgroundBottom,
       body: Container(
@@ -279,6 +303,7 @@ class _PrivacyVisibilityScreenState extends State<PrivacyVisibilityScreen> {
     );
   }
 
+  // Titre de section réutilisable.
   Widget _buildSectionTitle(String title) {
     return Text(
       title,
@@ -290,6 +315,7 @@ class _PrivacyVisibilityScreenState extends State<PrivacyVisibilityScreen> {
     );
   }
 
+  // Carte contenant les options de visibilité pour le profil.
   Widget _buildVisibilityCard() {
     return Container(
       width: double.infinity,
@@ -320,6 +346,8 @@ class _PrivacyVisibilityScreenState extends State<PrivacyVisibilityScreen> {
     );
   }
 
+  // Option de visibilité réutilisable.
+  // Affiche une carte cliquable avec un titre, une description et un indicateur sélectionné.
   Widget _buildVisibilityOption({
     required IconData icon,
     required String title,
@@ -404,6 +432,7 @@ class _PrivacyVisibilityScreenState extends State<PrivacyVisibilityScreen> {
     );
   }
 
+  // Carte d'information expliquant l'impact de la visibilité choisie.
   Widget _buildInfoCard() {
     return Container(
       width: double.infinity,
@@ -437,6 +466,8 @@ class _PrivacyVisibilityScreenState extends State<PrivacyVisibilityScreen> {
     );
   }
 
+  // Bouton de sauvegarde en bas de l'écran.
+  // Il déclenche l'enregistrement de la visibilité sélectionnée.
   Widget _buildBottomButton() {
     return Container(
       color: backgroundBottom,

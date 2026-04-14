@@ -1,8 +1,16 @@
+// Import des packages nécessaires :
+// - dart:convert pour le décodage JSON.
+// - flutter/material.dart pour l'interface utilisateur Flutter.
+// - http pour les requêtes vers l'API.
+// - shared_preferences pour récupérer le token stocké localement.
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+// Écran principal de gestion des expériences et formations du candidat.
+// Cet écran affiche les sections "Experience" et "Education" et permet
+// d'ajouter, modifier ou supprimer des éléments.
 class ExperienceEducationScreen extends StatefulWidget {
   const ExperienceEducationScreen({super.key});
 
@@ -12,31 +20,38 @@ class ExperienceEducationScreen extends StatefulWidget {
 }
 
 class _ExperienceEducationScreenState extends State<ExperienceEducationScreen> {
+  // Couleurs de l'interface utilisées pour les boutons et le fond.
   static const Color primaryBlue = Color(0xFF1E6CFF);
   static const Color backgroundTop = Color(0xFF08162D);
   static const Color backgroundBottom = Color(0xFF050A12);
   static const Color cardColor = Color(0xFF121C31);
 
+  // URL de base de l'API.
   static const String baseUrl = 'http://192.168.100.47:5000/api';
 
+  // États pour le chargement de la page, l'état de sauvegarde et les erreurs.
   bool isLoading = true;
   bool isSaving = false;
   String? errorMessage;
 
+  // Listes contenant les expériences et les formations du candidat.
   List<Map<String, dynamic>> experiences = [];
   List<Map<String, dynamic>> educations = [];
 
   @override
   void initState() {
     super.initState();
+    // Démarrage initial : on charge les données existantes depuis l'API.
     loadExperienceAndEducation();
   }
 
+  // Récupère le token d'authentification depuis le stockage local.
   Future<String?> _getToken() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString('token');
   }
 
+  // Charge les expériences et formations de l'utilisateur connecté.
   Future<void> loadExperienceAndEducation() async {
     try {
       setState(() {
@@ -46,6 +61,7 @@ class _ExperienceEducationScreenState extends State<ExperienceEducationScreen> {
 
       final token = await _getToken();
 
+      // Vérifie la présence du token avant d'effectuer les appels API.
       if (token == null || token.isEmpty) {
         setState(() {
           isLoading = false;
@@ -54,6 +70,7 @@ class _ExperienceEducationScreenState extends State<ExperienceEducationScreen> {
         return;
       }
 
+      // Requête pour récupérer les expériences du candidat.
       final expResponse = await http.get(
         Uri.parse('$baseUrl/experience/me'),
         headers: {
@@ -62,6 +79,7 @@ class _ExperienceEducationScreenState extends State<ExperienceEducationScreen> {
         },
       );
 
+      // Requête pour récupérer les formations du candidat.
       final eduResponse = await http.get(
         Uri.parse('$baseUrl/education/me'),
         headers: {
@@ -72,6 +90,7 @@ class _ExperienceEducationScreenState extends State<ExperienceEducationScreen> {
 
       if (expResponse.statusCode == 200) {
         final expData = jsonDecode(expResponse.body);
+        // Convertit les données en liste de maps pour l'affichage.
         experiences = List<Map<String, dynamic>>.from(expData['experiences'] ?? []);
       } else {
         experiences = [];
@@ -95,12 +114,15 @@ class _ExperienceEducationScreenState extends State<ExperienceEducationScreen> {
     }
   }
 
+  // Ouvre une boîte de dialogue pour ajouter une nouvelle expérience.
+  // Si l'utilisateur confirme, la nouvelle expérience est envoyée à l'API.
   Future<void> _addExperience() async {
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (_) => const _ExperienceDialog(),
     );
 
+    // Si la boîte de dialogue est fermée sans sauvegarde, on ne fait rien.
     if (result == null) return;
 
     try {
@@ -126,6 +148,7 @@ class _ExperienceEducationScreenState extends State<ExperienceEducationScreen> {
             content: Text(data['message'] ?? 'Experience ajoutée avec succès'),
           ),
         );
+        // Recharge les listes après ajout.
         await loadExperienceAndEducation();
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -142,6 +165,8 @@ class _ExperienceEducationScreenState extends State<ExperienceEducationScreen> {
     }
   }
 
+  // Ouvre une boîte de dialogue pour modifier une expérience existante.
+  // Les champs sont préremplis avec les valeurs actuelles.
   Future<void> _editExperience(Map<String, dynamic> item) async {
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
@@ -195,6 +220,7 @@ class _ExperienceEducationScreenState extends State<ExperienceEducationScreen> {
     }
   }
 
+  // Supprime une expérience identifiée par son ID.
   Future<void> _deleteExperience(int id) async {
     try {
       final token = await _getToken();
@@ -234,6 +260,8 @@ class _ExperienceEducationScreenState extends State<ExperienceEducationScreen> {
     }
   }
 
+  // Ouvre une boîte de dialogue pour ajouter une nouvelle formation.
+  // Si l'utilisateur valide, les données sont envoyées à l'API.
   Future<void> _addEducation() async {
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
@@ -281,6 +309,8 @@ class _ExperienceEducationScreenState extends State<ExperienceEducationScreen> {
     }
   }
 
+  // Ouvre une boîte de dialogue pour modifier une formation existante.
+  // Les champs sont remplis avec l'état actuel de l'élément.
   Future<void> _editEducation(Map<String, dynamic> item) async {
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
@@ -334,6 +364,7 @@ class _ExperienceEducationScreenState extends State<ExperienceEducationScreen> {
     }
   }
 
+  // Supprime une formation identifiée par son ID.
   Future<void> _deleteEducation(int id) async {
     try {
       final token = await _getToken();
@@ -373,6 +404,8 @@ class _ExperienceEducationScreenState extends State<ExperienceEducationScreen> {
     }
   }
 
+  // Formate une date pour la réutiliser dans les champs de saisie.
+  // On conserve seulement la partie YYYY-MM-DD si la valeur est plus longue.
   String _formatDateInput(dynamic value) {
     if (value == null) return '';
     final raw = value.toString();
@@ -382,6 +415,8 @@ class _ExperienceEducationScreenState extends State<ExperienceEducationScreen> {
     return raw;
   }
 
+  // Formate une date pour l'affichage dans les cartes.
+  // Retourne "Present" si la valeur est vide ou nulle.
   String _formatDateDisplay(dynamic value) {
     if (value == null || value.toString().isEmpty) return 'Present';
     final raw = value.toString();
@@ -391,6 +426,7 @@ class _ExperienceEducationScreenState extends State<ExperienceEducationScreen> {
     return raw;
   }
 
+  // Barre supérieure comprenant le bouton retour et le titre de la page.
   Widget _buildTopBar(BuildContext context) {
     return Row(
       children: [
@@ -426,6 +462,7 @@ class _ExperienceEducationScreenState extends State<ExperienceEducationScreen> {
     );
   }
 
+  // En-tête de section réutilisable avec un bouton d'ajout à droite.
   Widget _buildSectionHeaderWithAdd({
     required String title,
     required VoidCallback onAdd,
@@ -473,6 +510,8 @@ class _ExperienceEducationScreenState extends State<ExperienceEducationScreen> {
     );
   }
 
+  // Carte d'affichage d'une expérience individuelle.
+  // Contient les actions d'édition et de suppression.
   Widget _buildExperienceCard(Map<String, dynamic> item) {
     return Container(
       width: double.infinity,
@@ -546,6 +585,8 @@ class _ExperienceEducationScreenState extends State<ExperienceEducationScreen> {
     );
   }
 
+  // Carte d'affichage d'une formation individuelle.
+  // Contient les informations principales et les actions associées.
   Widget _buildEducationCard(Map<String, dynamic> item) {
     return Container(
       width: double.infinity,
@@ -619,6 +660,7 @@ class _ExperienceEducationScreenState extends State<ExperienceEducationScreen> {
     );
   }
 
+  // Ligne de détail réutilisable avec une icône et du texte.
   Widget _buildInfoLine(IconData icon, String text) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -642,6 +684,7 @@ class _ExperienceEducationScreenState extends State<ExperienceEducationScreen> {
     );
   }
 
+  // Bloc d'affichage de la description d'une expérience.
   Widget _buildDescription(String text) {
     return Container(
       width: double.infinity,
@@ -661,6 +704,7 @@ class _ExperienceEducationScreenState extends State<ExperienceEducationScreen> {
     );
   }
 
+  // Bouton bas de page qui permet de revenir et de fermer l'écran.
   Widget _buildBottomButton() {
     return Container(
       color: backgroundBottom,
@@ -705,6 +749,7 @@ class _ExperienceEducationScreenState extends State<ExperienceEducationScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Affiche un indicateur de chargement tant que les données ne sont pas prêtes.
     if (isLoading) {
       return const Scaffold(
         backgroundColor: backgroundBottom,
@@ -714,6 +759,7 @@ class _ExperienceEducationScreenState extends State<ExperienceEducationScreen> {
       );
     }
 
+    // Si une erreur est survenue pendant le chargement, on affiche un message.
     if (errorMessage != null) {
       return Scaffold(
         backgroundColor: backgroundBottom,
@@ -743,6 +789,7 @@ class _ExperienceEducationScreenState extends State<ExperienceEducationScreen> {
       );
     }
 
+    // Affiche le contenu principal : sections d'expérience et d'éducation.
     return Scaffold(
       backgroundColor: backgroundBottom,
       resizeToAvoidBottomInset: true,
@@ -812,6 +859,7 @@ class _ExperienceEducationScreenState extends State<ExperienceEducationScreen> {
     );
   }
 
+  // Carte affichée quand il n'y a pas d'élément dans la section.
   Widget _buildEmptyCard(String text) {
     return Container(
       width: double.infinity,
@@ -832,6 +880,8 @@ class _ExperienceEducationScreenState extends State<ExperienceEducationScreen> {
   }
 }
 
+// Dialogue modal pour ajouter ou modifier une expérience.
+// Les valeurs initiales peuvent être fournies pour l'édition.
 class _ExperienceDialog extends StatefulWidget {
   final String initialJobTitle;
   final String initialCompany;
@@ -858,45 +908,46 @@ class _ExperienceDialogState extends State<_ExperienceDialog> {
   late final TextEditingController endDateController;
   late final TextEditingController descriptionController;
 
-
+  // Ouvre le sélecteur de date et met à jour le champ correspondant.
   Future<void> _pickDate(TextEditingController controller) async {
-  final now = DateTime.now();
+    final now = DateTime.now();
 
-  DateTime initialDate = now;
-  if (controller.text.trim().isNotEmpty) {
-    try {
-      initialDate = DateTime.parse(controller.text.trim());
-    } catch (_) {}
-  }
+    DateTime initialDate = now;
+    if (controller.text.trim().isNotEmpty) {
+      try {
+        initialDate = DateTime.parse(controller.text.trim());
+      } catch (_) {}
+    }
 
-  final picked = await showDatePicker(
-    context: context,
-    initialDate: initialDate,
-    firstDate: DateTime(1980),
-    lastDate: DateTime(2100),
-    builder: (context, child) {
-      return Theme(
-        data: Theme.of(context).copyWith(
-          colorScheme: const ColorScheme.dark(
-            primary: Color(0xFF1E6CFF),
-            surface: Color(0xFF121C31),
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: DateTime(1980),
+      lastDate: DateTime(2100),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: Color(0xFF1E6CFF),
+              surface: Color(0xFF121C31),
+            ),
+            dialogBackgroundColor: Color(0xFF121C31),
           ),
-          dialogBackgroundColor: Color(0xFF121C31),
-        ),
-        child: child!,
-      );
-    },
-  );
+          child: child!,
+        );
+      },
+    );
 
-  if (picked != null) {
-    controller.text = picked.toIso8601String().substring(0, 10);
-    setState(() {});
+    if (picked != null) {
+      controller.text = picked.toIso8601String().substring(0, 10);
+      setState(() {});
+    }
   }
-}
 
   @override
   void initState() {
     super.initState();
+    // Initialisation des contrôleurs de saisie avec les valeurs reçues.
     jobTitleController = TextEditingController(text: widget.initialJobTitle);
     companyController = TextEditingController(text: widget.initialCompany);
     startDateController = TextEditingController(text: widget.initialStartDate);
@@ -916,85 +967,87 @@ class _ExperienceDialogState extends State<_ExperienceDialog> {
   }
 
   @override
- Widget build(BuildContext context) {
-  return AlertDialog(
-    backgroundColor: const Color(0xFF121C31),
-    title: const Text(
-      "Experience",
-      style: TextStyle(color: Colors.white),
-    ),
-    content: SingleChildScrollView(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _dialogInput(jobTitleController, "Job title"),
-          const SizedBox(height: 12),
-          _dialogInput(companyController, "Company"),
-          const SizedBox(height: 12),
-          _dialogDateInput(
-            startDateController,
-            "Start date",
-            () => _pickDate(startDateController),
-          ),
-          const SizedBox(height: 12),
-          _dialogDateInput(
-            endDateController,
-            "End date",
-            () => _pickDate(endDateController),
-          ),
-          const SizedBox(height: 12),
-          _dialogInput(descriptionController, "Description", maxLines: 4),
-        ],
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: const Color(0xFF121C31),
+      title: const Text(
+        "Experience",
+        style: TextStyle(color: Colors.white),
       ),
-    ),
-    actions: [
-      TextButton(
-        onPressed: () => Navigator.pop(context),
-        child: const Text("Cancel"),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _dialogInput(jobTitleController, "Job title"),
+            const SizedBox(height: 12),
+            _dialogInput(companyController, "Company"),
+            const SizedBox(height: 12),
+            _dialogDateInput(
+              startDateController,
+              "Start date",
+              () => _pickDate(startDateController),
+            ),
+            const SizedBox(height: 12),
+            _dialogDateInput(
+              endDateController,
+              "End date",
+              () => _pickDate(endDateController),
+            ),
+            const SizedBox(height: 12),
+            _dialogInput(descriptionController, "Description", maxLines: 4),
+          ],
+        ),
       ),
-      ElevatedButton(
-        onPressed: () {
-          Navigator.pop(context, {
-            'job_title': jobTitleController.text.trim(),
-            'company': companyController.text.trim(),
-            'start_date': startDateController.text.trim(),
-            'end_date': endDateController.text.trim(),
-            'description': descriptionController.text.trim(),
-          });
-        },
-        child: const Text("Save"),
-      ),
-    ],
-  );
-}
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text("Cancel"),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            Navigator.pop(context, {
+              'job_title': jobTitleController.text.trim(),
+              'company': companyController.text.trim(),
+              'start_date': startDateController.text.trim(),
+              'end_date': endDateController.text.trim(),
+              'description': descriptionController.text.trim(),
+            });
+          },
+          child: const Text("Save"),
+        ),
+      ],
+    );
+  }
 
-    Widget _dialogDateInput(
-  TextEditingController controller,
-  String hint,
-  VoidCallback onTap,
-) {
-  return TextField(
-    controller: controller,
-    readOnly: true,
-    onTap: onTap,
-    style: const TextStyle(color: Colors.white),
-    decoration: InputDecoration(
-      hintText: hint,
-      hintStyle: TextStyle(color: Colors.white.withOpacity(0.35)),
-      suffixIcon: const Icon(
-        Icons.calendar_month_outlined,
-        color: Colors.white70,
+  // Champ de date réutilisable qui ouvre le sélecteur au clic.
+  Widget _dialogDateInput(
+    TextEditingController controller,
+    String hint,
+    VoidCallback onTap,
+  ) {
+    return TextField(
+      controller: controller,
+      readOnly: true,
+      onTap: onTap,
+      style: const TextStyle(color: Colors.white),
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: TextStyle(color: Colors.white.withOpacity(0.35)),
+        suffixIcon: const Icon(
+          Icons.calendar_month_outlined,
+          color: Colors.white70,
+        ),
+        filled: true,
+        fillColor: Colors.white.withOpacity(0.05),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide.none,
+        ),
       ),
-      filled: true,
-      fillColor: Colors.white.withOpacity(0.05),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: BorderSide.none,
-      ),
-    ),
-  );
-}
+    );
+  }
 
+  // Champ de saisie texte réutilisable pour l'alerte.
   Widget _dialogInput(
     TextEditingController controller,
     String hint, {
@@ -1018,6 +1071,7 @@ class _ExperienceDialogState extends State<_ExperienceDialog> {
   }
 }
 
+// Dialogue modal pour ajouter ou modifier une formation.
 class _EducationDialog extends StatefulWidget {
   final String initialSchool;
   final String initialDegree;
@@ -1044,40 +1098,41 @@ class _EducationDialogState extends State<_EducationDialog> {
   late final TextEditingController startDateController;
   late final TextEditingController endDateController;
 
-   Future<void> _pickDate(TextEditingController controller) async {
-  final now = DateTime.now();
+  // Ouvre le sélecteur de date et met à jour le champ associé.
+  Future<void> _pickDate(TextEditingController controller) async {
+    final now = DateTime.now();
 
-  DateTime initialDate = now;
-  if (controller.text.trim().isNotEmpty) {
-    try {
-      initialDate = DateTime.parse(controller.text.trim());
-    } catch (_) {}
-  }
+    DateTime initialDate = now;
+    if (controller.text.trim().isNotEmpty) {
+      try {
+        initialDate = DateTime.parse(controller.text.trim());
+      } catch (_) {}
+    }
 
-  final picked = await showDatePicker(
-    context: context,
-    initialDate: initialDate,
-    firstDate: DateTime(1980),
-    lastDate: DateTime(2100),
-    builder: (context, child) {
-      return Theme(
-        data: Theme.of(context).copyWith(
-          colorScheme: const ColorScheme.dark(
-            primary: Color(0xFF1E6CFF),
-            surface: Color(0xFF121C31),
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: DateTime(1980),
+      lastDate: DateTime(2100),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: Color(0xFF1E6CFF),
+              surface: Color(0xFF121C31),
+            ),
+            dialogBackgroundColor: Color(0xFF121C31),
           ),
-          dialogBackgroundColor: Color(0xFF121C31),
-        ),
-        child: child!,
-      );
-    },
-  );
+          child: child!,
+        );
+      },
+    );
 
-  if (picked != null) {
-    controller.text = picked.toIso8601String().substring(0, 10);
-    setState(() {});
+    if (picked != null) {
+      controller.text = picked.toIso8601String().substring(0, 10);
+      setState(() {});
+    }
   }
-}
 
   @override
   void initState() {
@@ -1100,85 +1155,87 @@ class _EducationDialogState extends State<_EducationDialog> {
   }
 
   @override
- Widget build(BuildContext context) {
-  return AlertDialog(
-    backgroundColor: const Color(0xFF121C31),
-    title: const Text(
-      "Education",
-      style: TextStyle(color: Colors.white),
-    ),
-    content: SingleChildScrollView(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _dialogInput(schoolController, "School"),
-          const SizedBox(height: 12),
-          _dialogInput(degreeController, "Degree"),
-          const SizedBox(height: 12),
-          _dialogInput(fieldController, "Field"),
-          const SizedBox(height: 12),
-          _dialogDateInput(
-            startDateController,
-            "Start date",
-            () => _pickDate(startDateController),
-          ),
-          const SizedBox(height: 12),
-          _dialogDateInput(
-            endDateController,
-            "End date",
-            () => _pickDate(endDateController),
-          ),
-        ],
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: const Color(0xFF121C31),
+      title: const Text(
+        "Education",
+        style: TextStyle(color: Colors.white),
       ),
-    ),
-    actions: [
-      TextButton(
-        onPressed: () => Navigator.pop(context),
-        child: const Text("Cancel"),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _dialogInput(schoolController, "School"),
+            const SizedBox(height: 12),
+            _dialogInput(degreeController, "Degree"),
+            const SizedBox(height: 12),
+            _dialogInput(fieldController, "Field"),
+            const SizedBox(height: 12),
+            _dialogDateInput(
+              startDateController,
+              "Start date",
+              () => _pickDate(startDateController),
+            ),
+            const SizedBox(height: 12),
+            _dialogDateInput(
+              endDateController,
+              "End date",
+              () => _pickDate(endDateController),
+            ),
+          ],
+        ),
       ),
-      ElevatedButton(
-        onPressed: () {
-          Navigator.pop(context, {
-            'school': schoolController.text.trim(),
-            'degree': degreeController.text.trim(),
-            'field': fieldController.text.trim(),
-            'start_date': startDateController.text.trim(),
-            'end_date': endDateController.text.trim(),
-          });
-        },
-        child: const Text("Save"),
-      ),
-    ],
-  );
-}
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text("Cancel"),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            Navigator.pop(context, {
+              'school': schoolController.text.trim(),
+              'degree': degreeController.text.trim(),
+              'field': fieldController.text.trim(),
+              'start_date': startDateController.text.trim(),
+              'end_date': endDateController.text.trim(),
+            });
+          },
+          child: const Text("Save"),
+        ),
+      ],
+    );
+  }
 
- Widget _dialogDateInput(
-  TextEditingController controller,
-  String hint,
-  VoidCallback onTap,
-) {
-  return TextField(
-    controller: controller,
-    readOnly: true,
-    onTap: onTap,
-    style: const TextStyle(color: Colors.white),
-    decoration: InputDecoration(
-      hintText: hint,
-      hintStyle: TextStyle(color: Colors.white.withOpacity(0.35)),
-      suffixIcon: const Icon(
-        Icons.calendar_month_outlined,
-        color: Colors.white70,
+  // Champ de date readonly utilisé dans la boîte de dialogue.
+  Widget _dialogDateInput(
+    TextEditingController controller,
+    String hint,
+    VoidCallback onTap,
+  ) {
+    return TextField(
+      controller: controller,
+      readOnly: true,
+      onTap: onTap,
+      style: const TextStyle(color: Colors.white),
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: TextStyle(color: Colors.white.withOpacity(0.35)),
+        suffixIcon: const Icon(
+          Icons.calendar_month_outlined,
+          color: Colors.white70,
+        ),
+        filled: true,
+        fillColor: Colors.white.withOpacity(0.05),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide.none,
+        ),
       ),
-      filled: true,
-      fillColor: Colors.white.withOpacity(0.05),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: BorderSide.none,
-      ),
-    ),
-  );
-}
+    );
+  }
 
+  // Champ de texte réutilisable dans le dialogue.
   Widget _dialogInput(
     TextEditingController controller,
     String hint, {

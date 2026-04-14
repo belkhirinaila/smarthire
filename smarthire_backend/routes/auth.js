@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const { protect } = require("../middleware/authMiddleware");
 const { register, login , verifyOtp ,resendOtp ,forgotPassword ,verifyResetOtp,resetPassword} = require("../controllers/authcontroller");
-
+const { getMe } = require("../controllers/authcontroller");
 // REGISTER
 router.post("/register", register);
 
@@ -24,11 +24,6 @@ router.post("/verify-reset-otp", verifyResetOtp);
 // RESET PASSWORD
 router.post("/reset-password", resetPassword);
 
-router.get("/me", protect, (req, res) => {
-  res.status(200).json({
-    message: "Token valide ✅",
-    user: req.user
-  });
-});
-
+// GET CURRENT USER
+router.get("/me", protect, getMe);
 module.exports = router;

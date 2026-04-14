@@ -32,7 +32,12 @@ router.post(
           [fileName, filePath, req.user.id]
         );
 
-        return res.json({ message: "CV mis à jour avec succès" });
+        const updatedUrl = `${req.protocol}://${req.get('host')}/${filePath.replace(/\\/g, '/')}`;
+        return res.json({
+          message: "CV mis à jour avec succès",
+          file: fileName,
+          file_url: updatedUrl,
+        });
       }
 
       // insert
@@ -41,9 +46,11 @@ router.post(
         [req.user.id, fileName, filePath]
       );
 
+      const fileUrl = `${req.protocol}://${req.get('host')}/${filePath.replace(/\\/g, '/')}`;
       res.status(201).json({
         message: "CV uploadé avec succès",
-        file: fileName
+        file: fileName,
+        file_url: fileUrl,
       });
     } catch (err) {
       res.status(500).json({ message: "Erreur serveur", error: err.message });
@@ -63,8 +70,16 @@ router.get("/me", protect, authorize("candidate"), async (req, res) => {
       return res.status(404).json({ message: "Aucun CV trouvé" });
     }
 
+    const filePath = rows[0].file_path?.toString().replace(/\\/g, '/');
+    const fileUrl = filePath
+      ? `${req.protocol}://${req.get('host')}/${filePath}`
+      : null;
+
     res.json({
-      cv: rows[0]
+      cv: {
+        ...rows[0],
+        file_url: fileUrl,
+      }
     });
   } catch (err) {
     res.status(500).json({ message: "Erreur serveur", error: err.message });

@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 
+// Ecran de confirmation affiché après l'envoi d'une candidature.
+// Il présente un message de succès, détaille l'offre concernée et propose
+// des actions de navigation ainsi que des suggestions d'offres similaires.
 class ApplicationSuccessScreen extends StatelessWidget {
   const ApplicationSuccessScreen({super.key});
 
   /// ==============================
   /// Couleurs principales
   /// ==============================
+  // Couleurs utilisées dans l'interface pour harmoniser le thème sombre.
   static const Color primaryBlue = Color(0xFF1E6CFF);
   static const Color backgroundTop = Color(0xFF08162D);
   static const Color backgroundBottom = Color(0xFF050A12);
@@ -13,6 +17,8 @@ class ApplicationSuccessScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Récupération des arguments transmis à partir de la navigation.
+    // Ils contiennent le titre et le nom de l'entreprise de l'offre ciblée.
     final Map<String, dynamic>? args =
         ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
 
@@ -23,6 +29,7 @@ class ApplicationSuccessScreen extends StatelessWidget {
     /// ==============================
     /// Jobs similaires temporaires
     /// ==============================
+    // Liste de données factices affichée comme exemples de postes similaires.
     final List<Map<String, dynamic>> similarJobs = [
       {
         "title": "Job title",
@@ -38,6 +45,7 @@ class ApplicationSuccessScreen extends StatelessWidget {
       },
     ];
 
+    // Construction de l'interface principale de l'écran de succès.
     return Scaffold(
       backgroundColor: backgroundBottom,
       body: Container(
@@ -58,10 +66,12 @@ class ApplicationSuccessScreen extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // Barre du haut contenant le bouton de fermeture et le titre.
                       _buildTopBar(context),
                       const SizedBox(height: 24),
                       _buildSuccessIcon(),
                       const SizedBox(height: 28),
+                      // Message de succès principal affiché au centre de l'écran.
                       const Center(
                         child: Text(
                           "Application Sent!",
@@ -99,6 +109,7 @@ class ApplicationSuccessScreen extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 34),
+                      // Section de suggestions affichant des emplois similaires.
                       _buildSectionHeader(
                         title: "Similar Jobs in Algeria",
                         onSeeAll: () {},
@@ -112,6 +123,7 @@ class ApplicationSuccessScreen extends StatelessWidget {
                   ),
                 ),
               ),
+              // Bloc fixe en bas avec les actions principales de l'utilisateur.
               Container(
                 color: backgroundBottom,
                 padding: const EdgeInsets.fromLTRB(18, 10, 18, 24),
@@ -121,6 +133,7 @@ class ApplicationSuccessScreen extends StatelessWidget {
                       width: double.infinity,
                       height: 58,
                       child: ElevatedButton(
+                        // Bouton qui ramène l'utilisateur à l'accueil du candidat.
                         onPressed: () {
                           Navigator.pushNamedAndRemoveUntil(
                             context,
@@ -146,6 +159,7 @@ class ApplicationSuccessScreen extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 10),
+                    // Lien secondaire vers la liste des candidatures de l'utilisateur.
                     TextButton(
                       onPressed: () {
                         Navigator.pushNamed(context, '/applications');
@@ -172,6 +186,7 @@ class ApplicationSuccessScreen extends StatelessWidget {
   /// ==============================
   /// Top bar avec bouton fermer
   /// ==============================
+  /// Retourne une ligne contenant le bouton de fermeture et le titre.
   Widget _buildTopBar(BuildContext context) {
     return Row(
       children: [
@@ -215,6 +230,7 @@ class ApplicationSuccessScreen extends StatelessWidget {
   /// ==============================
   /// Icône de succès principale
   /// ==============================
+  /// Conteneur circulaire stylisé avec une coche pour indiquer la réussite.
   Widget _buildSuccessIcon() {
     return Center(
       child: Container(
@@ -257,6 +273,7 @@ class ApplicationSuccessScreen extends StatelessWidget {
   /// ==============================
   /// Header de section
   /// ==============================
+  /// Renvoie un en-tête de section avec un titre et un bouton "Voir tout".
   Widget _buildSectionHeader({
     required String title,
     required VoidCallback onSeeAll,
@@ -290,6 +307,7 @@ class ApplicationSuccessScreen extends StatelessWidget {
   /// ==============================
   /// Card job similaire
   /// ==============================
+  /// Génère une carte de poste similaire à partir des données fournies.
   Widget _buildSimilarJobCard(Map<String, dynamic> job) {
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
@@ -369,6 +387,7 @@ class ApplicationSuccessScreen extends StatelessWidget {
   /// ==============================
   /// Card découverte
   /// ==============================
+  /// Carte mise en avant invitant l'utilisateur à découvrir davantage d'offres.
   Widget _buildDiscoverCard() {
     return Container(
       width: double.infinity,
@@ -436,6 +455,7 @@ class ApplicationSuccessScreen extends StatelessWidget {
   /// ==============================
   /// Tag réutilisable
   /// ==============================
+  /// Petit badge de type d'offre utilisé dans les cartes similaires.
   Widget _buildTag({
     required String text,
     required Color background,

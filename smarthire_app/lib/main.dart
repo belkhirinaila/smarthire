@@ -1,9 +1,15 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 
+/// ==============================
+/// SPLASH / ONBOARDING
+/// ==============================
 import 'package:smarthire_app/features/splash/onboarding_screen.dart';
 import 'package:smarthire_app/features/splash/welcome_screen.dart';
 
+/// ==============================
+/// AUTH
+/// ==============================
 import 'package:smarthire_app/features/auth/login_screen.dart';
 import 'package:smarthire_app/features/auth/signup_screen.dart';
 import 'package:smarthire_app/features/auth/reset_password_screen.dart';
@@ -14,6 +20,9 @@ import 'package:smarthire_app/features/auth/otp_screen.dart';
 import 'package:smarthire_app/features/auth/success_screen.dart';
 import 'package:smarthire_app/features/auth/role_screen.dart';
 
+/// ==============================
+/// CANDIDATE
+/// ==============================
 import 'package:smarthire_app/features/candidate/candidate_main_screen.dart';
 import 'package:smarthire_app/features/candidate/jobs/job_details_screen.dart';
 import 'package:smarthire_app/features/candidate/applications/application_submission_screen.dart';
@@ -27,7 +36,22 @@ import 'package:smarthire_app/features/candidate/requests/request_decision_scree
 import 'package:smarthire_app/features/candidate/direct_chat_thread_screen.dart';
 import 'package:smarthire_app/features/candidate/jobs/saved_jobs_screen.dart';
 import 'package:smarthire_app/features/candidate/notifications_screen.dart';
-import 'package:smarthire_app/features/company/company_home_screen.dart';
+
+/// ==============================
+/// RECRUITER
+/// ==============================
+import 'package:smarthire_app/features/recruiter/recruiter_main_screen.dart';
+import 'package:smarthire_app/features/recruiter/jobs/create_job_screen.dart';
+import 'package:smarthire_app/features/recruiter/jobs/recruiter_jobs_screen.dart';
+import 'package:smarthire_app/features/recruiter/messages/recruiter_messages_screen.dart';
+import 'package:smarthire_app/features/recruiter/company/company_profile_screen.dart';
+import 'package:smarthire_app/features/recruiter/jobs/job_details_screen_for_recruiter.dart';
+import 'package:smarthire_app/features/recruiter/applications/applicants_screen.dart';
+import 'package:smarthire_app/features/recruiter/messages/chat_screen.dart';
+import 'package:smarthire_app/features/recruiter/applications/candidate_search_screen.dart';
+/// ==============================
+/// ADMIN
+/// ==============================
 import 'package:smarthire_app/features/admin/admin_home_screen.dart';
 
 void main() {
@@ -42,84 +66,93 @@ class SmartHireApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       initialRoute: '/',
+
       routes: {
         /// ==============================
-        /// Splash / Onboarding
+        /// SPLASH
         /// ==============================
         '/': (context) => const SplashScreen(),
         '/onboarding': (context) => const OnboardingScreen(),
         '/welcome': (context) => const WelcomeScreen(),
 
         /// ==============================
-        /// Auth
+        /// AUTH
         /// ==============================
         '/login': (context) => const LoginScreen(),
         '/signup': (context) => const SignupScreen(),
         '/reset-password': (context) => const ResetPasswordScreen(),
+
         '/reset-otp': (context) {
           final args =
               ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
           return ResetOtpScreen(email: args['email']);
         },
+
         '/new-password': (context) => const NewPasswordScreen(),
         '/password-success': (context) => const PasswordSuccessScreen(),
+
         '/otp': (context) {
           final args =
               ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
           return OtpScreen(email: args['email']);
         },
+
         '/success': (context) => const SuccessScreen(),
         '/role': (context) => const RoleScreen(),
 
         /// ==============================
-        /// Candidate - shell principal
+        /// CANDIDATE
         /// ==============================
         '/candidate': (context) => const CandidateMainScreen(),
 
-        /// ==============================
-        /// Candidate - jobs flow
-        /// ==============================
         '/job-details': (context) => const JobDetailsScreen(),
         '/apply': (context) => const ApplicationSubmissionScreen(),
         '/application-success': (context) => const ApplicationSuccessScreen(),
         '/application-details': (context) => const ApplicationDetailsScreen(),
         '/saved-jobs': (context) => const SavedJobsScreen(),
 
-        /// ==============================
-        /// Candidate - profile flow
-        /// ==============================
         '/edit-profile': (context) => const EditProfileScreen(),
         '/cv-skills': (context) => const CvSkillsScreen(),
         '/experience-education': (context) =>
             const ExperienceEducationScreen(),
-        '/privacy-visibility': (context) => const PrivacyVisibilityScreen(),
+        '/privacy-visibility': (context) =>
+            const PrivacyVisibilityScreen(),
 
-        /// ==============================
-        /// Candidate - requests / messages flow
-        /// ==============================
         '/request-decision': (context) => const RequestDecisionScreen(),
         '/direct-chat': (context) => const DirectChatThreadScreen(),
-        /// ==============================
-        /// Candidate - notifications flow
-        /// ==============================   
         '/notifications': (context) => const NotificationsScreen(),
 
         /// ==============================
-        /// Company / Admin
+        /// RECRUITER 🔥
         /// ==============================
-        '/company': (context) => const CompanyHomeScreen(),
+        '/recruiter': (context) => const RecruiterMainScreen(),
+        '/create-job': (context) => const CreateJobScreen(),
+        '/recruiter-job-details': (context) {
+        final args = ModalRoute.of(context)!.settings.arguments as Map;
+        return JobDetailsScreenForRecruiter(jobId: args['jobId']);
+        },
+        '/recruiter-applicants': (context) {
+         final args = ModalRoute.of(context)!.settings.arguments as Map;
+         return ApplicantsScreen(jobId: args['jobId']);
+       },
+       '/chat': (context) {
+         final args = ModalRoute.of(context)!.settings.arguments as Map;
+         return ChatScreen(conversationId: args['conversationId']);
+        },
+        '/create-job': (context) => const CreateJobScreen(),
+        '/search-candidates': (context) => const CandidateSearchScreen(),
+        /// ==============================
+        /// ADMIN
+        /// ==============================
         '/admin': (context) => const AdminHomeScreen(),
-
-        '/home': (context) => const Scaffold(
-              body: Center(
-                child: Text('Home Screen'),
-              ),
-            ),
       },
     );
   }
 }
 
+/// ==============================
+/// SPLASH SCREEN
+/// ==============================
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -174,6 +207,7 @@ class _SplashScreenState extends State<SplashScreen> {
         child: Column(
           children: [
             const Spacer(flex: 3),
+
             Container(
               width: 95,
               height: 95,
@@ -192,7 +226,9 @@ class _SplashScreenState extends State<SplashScreen> {
                 fit: BoxFit.contain,
               ),
             ),
+
             const SizedBox(height: 20),
+
             const Text(
               "SmartHire DZ",
               style: TextStyle(
@@ -201,7 +237,9 @@ class _SplashScreenState extends State<SplashScreen> {
                 fontWeight: FontWeight.bold,
               ),
             ),
+
             const Spacer(flex: 2),
+
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 80),
               child: ClipRRect(
@@ -213,7 +251,9 @@ class _SplashScreenState extends State<SplashScreen> {
                     alignment: Alignment.centerLeft,
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 120),
-                      width: MediaQuery.of(context).size.width * 0.55 * progress,
+                      width: MediaQuery.of(context).size.width *
+                          0.55 *
+                          progress,
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(20),
                         gradient: const LinearGradient(
@@ -228,6 +268,7 @@ class _SplashScreenState extends State<SplashScreen> {
                 ),
               ),
             ),
+
             const Spacer(flex: 4),
           ],
         ),

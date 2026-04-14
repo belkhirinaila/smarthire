@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+// Écran de décision de demande.
+// Cet écran affiche les détails d'une demande d'accès envoyée par un recruteur
+// et permet d'accepter ou de refuser cette demande.
 class RequestDecisionScreen extends StatefulWidget {
   const RequestDecisionScreen({super.key});
 
@@ -11,23 +14,32 @@ class RequestDecisionScreen extends StatefulWidget {
 }
 
 class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
+  // Couleurs utilisées par l'interface pour garder un style cohérent.
   static const Color primaryBlue = Color(0xFF1E6CFF);
   static const Color backgroundTop = Color(0xFF08162D);
   static const Color backgroundBottom = Color(0xFF050A12);
   static const Color cardColor = Color(0xFF121C31);
 
+  // URL de base vers l'API backend.
   static const String baseUrl = 'http://192.168.100.47:5000/api';
 
+  // Indique si l'utilisateur est en train d'accepter la demande.
   bool isAccepting = false;
+
+  // Indique si l'utilisateur est en train de décliner la demande.
   bool isDeclining = false;
 
+  // Méthode générique qui met à jour le statut de la demande sur le serveur.
   Future<void> _updateRequestStatus(String status) async {
+    // Récupère les arguments passés via la route de navigation.
     final args =
         ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
 
+    // L'identifiant de la demande doit être présent pour effectuer la mise à jour.
     final requestId = args?['id'];
 
     if (requestId == null) {
+      // Affiche une erreur si l'identifiant n'est pas disponible.
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Request ID introuvable")),
       );
@@ -35,6 +47,7 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
     }
 
     try {
+      // Récupère le token stocké localement pour authentifier la requête.
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('token');
 
@@ -45,6 +58,7 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
         return;
       }
 
+      // Envoie la requête PUT au backend pour mettre à jour le statut.
       final response = await http.put(
         Uri.parse('$baseUrl/requests/$requestId'),
         headers: {
@@ -54,10 +68,12 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
         body: jsonEncode({'status': status}),
       );
 
+      // Convertit la réponse JSON pour extraire les messages éventuels.
       final data = jsonDecode(response.body);
 
       if (!mounted) return;
 
+      // Si la mise à jour réussit, informe l'utilisateur et revient en arrière.
       if (response.statusCode == 200) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -66,6 +82,7 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
         );
         Navigator.pop(context);
       } else {
+        // Si le serveur retourne une erreur, affiche le message renvoyé.
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(data['message'] ?? "Erreur lors de la mise à jour"),
@@ -74,12 +91,14 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
       }
     } catch (e) {
       if (!mounted) return;
+      // En cas d'exception de réseau ou d'erreur inattendue, on affiche un message générique.
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Erreur de connexion au serveur")),
       );
     }
   }
 
+  // Lance l'acceptation de la demande et affiche un état chargé.
   Future<void> _acceptRequest() async {
     setState(() => isAccepting = true);
     await _updateRequestStatus('approved');
@@ -88,6 +107,7 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
     }
   }
 
+  // Lance le refus de la demande et affiche un état chargé.
   Future<void> _declineRequest() async {
     setState(() => isDeclining = true);
     await _updateRequestStatus('rejected');
@@ -98,9 +118,11 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Les arguments sont fournis par l'écran précédent lors de la navigation.
     final args =
         ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
 
+    // Extraction des valeurs affichées à l'écran avec des valeurs par défaut si elles manquent.
     final String company = args?['company'] ?? "Recruiter";
     final String title = args?['title'] ?? "Access Request";
     final String subtitle =
@@ -114,6 +136,8 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
             "This recruiter sent you an access request through the platform. "
                 "You can approve it to allow further interaction or reject it to close this request.";
 
+    // Construction de l'interface principale de l'écran.
+    // Le Scaffold contient le contenu principal et la barre d'action en bas.
     return Scaffold(
       backgroundColor: backgroundBottom,
       body: Container(
@@ -169,6 +193,7 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
     );
   }
 
+  // Barre supérieure de l'écran contenant le bouton de retour et le titre.
   Widget _buildTopBar(BuildContext context) {
     return Row(
       children: [
@@ -217,6 +242,7 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
     );
   }
 
+  // Carte principale qui présente les informations de base de la demande.
   Widget _buildMainCard({
     required String company,
     required String title,
@@ -235,6 +261,7 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
       ),
       child: Column(
         children: [
+          // Ligne supérieure avec l'icône de l'entreprise et le titre principal.
           Row(
             children: [
               Container(
@@ -293,6 +320,7 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
             ),
           ),
           const SizedBox(height: 18),
+          // Ligne avec le badge de statut et l'heure de réception.
           Row(
             children: [
               _buildTypeBadge(
@@ -324,6 +352,7 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
     );
   }
 
+  // Titre de section utilisé pour les différents blocs de contenu.
   Widget _buildSectionTitle(String title) {
     return Text(
       title,
@@ -335,6 +364,7 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
     );
   }
 
+  // Carte qui affiche la description longue de la demande.
   Widget _buildDescriptionCard(String text) {
     return Container(
       width: double.infinity,
@@ -355,6 +385,7 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
     );
   }
 
+  // Carte qui présente les actions possibles pour cette demande.
   Widget _buildActionsInfoCard() {
     return Container(
       width: double.infinity,
@@ -388,6 +419,7 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
     );
   }
 
+  // Carte qui affiche un aperçu de l'entreprise, du temps et du statut.
   Widget _buildContactOverviewCard(String company, String time, String status) {
     return Container(
       width: double.infinity,
@@ -421,6 +453,7 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
     );
   }
 
+  // Ligne d'information utilisée à l'intérieur des cartes de résumé.
   Widget _buildInfoRow({
     required IconData icon,
     required String label,
@@ -463,6 +496,7 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
     );
   }
 
+  // Badge de type qui montre le statut de la demande.
   Widget _buildTypeBadge({
     required String text,
     required Color color,
@@ -485,6 +519,7 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
     );
   }
 
+  // Barre du bas avec les boutons d'action pour accepter ou refuser la demande.
   Widget _buildBottomBar(
     BuildContext context,
     Map<String, dynamic>? args,
@@ -495,6 +530,7 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          // Ligne de boutons principale pour Refuser ou Accepter.
           Row(
             children: [
               Expanded(
@@ -518,6 +554,7 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
                               strokeWidth: 2.3,
                             ),
                           )
+
                         : const Text(
                             "Decline",
                             style: TextStyle(
@@ -564,6 +601,7 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
             ],
           ),
           const SizedBox(height: 10),
+          // Bouton pour ouvrir la conversation directe avec le recruteur.
           SizedBox(
             width: double.infinity,
             height: 52,
@@ -591,6 +629,7 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
   }
 }
 
+// Petit composant réutilisable pour afficher une ligne d'action avec icône, titre et description.
 class _ActionInfoRow extends StatelessWidget {
   final IconData icon;
   final String title;

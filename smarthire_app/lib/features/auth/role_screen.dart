@@ -1,7 +1,13 @@
+// Import des bibliothèques nécessaires :
+// - dart:convert pour la conversion JSON des données envoyées au backend.
+// - flutter/material.dart pour les widgets et le design de l'interface.
+// - package:http pour effectuer les requêtes HTTP vers l'API.
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
+// Ecran où l'utilisateur choisit son rôle lors de l'inscription.
+// Ce rôle influence ensuite le type de compte créé côté backend.
 class RoleScreen extends StatefulWidget {
   const RoleScreen({super.key});
 
@@ -10,35 +16,41 @@ class RoleScreen extends StatefulWidget {
 }
 
 class _RoleScreenState extends State<RoleScreen> {
+  // Couleur principale utilisée pour les boutons et les éléments sélectionnés.
   static const Color primaryBlue = Color(0xFF1E6CFF);
 
-  // 0 = candidate, 1 = recruiter
+  // Etat du rôle sélectionné : 0 pour candidat, 1 pour recruteur.
   int selected = 0;
+
+  // Indicateur de chargement pour désactiver le bouton pendant l'appel API.
   bool isLoading = false;
 
   /// ==============================
   /// Envoyer les données d'inscription au backend
   /// ==============================
+  /// Cette méthode récupère les informations précédemment saisies,
+  /// choisit le rôle sélectionné et envoie les données au backend.
   Future<void> registerUser() async {
     final args =
         ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
 
-    // Nettoyer les données avant envoi
+    // Nettoyage et formatage des données avant l'envoi.
     final fullName = (args['full_name'] ?? '').toString().trim();
     final email = (args['email'] ?? '').toString().trim();
     final password = (args['password'] ?? '').toString();
 
-    // IMPORTANT:
-    // recruiter au lieu de company pour correspondre à la base de données
+    // Mapping du rôle sélectionné vers la valeur attendue par le backend.
+    // Le rôle est 'candidate' pour la sélection candidat et 'recruiter' pour recruteur.
     final role = selected == 0 ? 'candidate' : 'recruiter';
 
+    // Activer l'état de chargement avant d'envoyer la requête.
     setState(() {
       isLoading = true;
     });
 
     try {
       final response = await http.post(
-        Uri.parse("http://127.0.0.1:5000/api/auth/register"),
+        Uri.parse("http://192.168.100.47:5000/api/auth/register"),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
           "full_name": fullName,
@@ -87,10 +99,13 @@ class _RoleScreenState extends State<RoleScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Récupération des arguments transmis depuis l'écran précédent.
+    // Ces données contiennent les informations d'inscription déjà saisies.
     final args =
         ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>?;
 
     if (args == null) {
+      // Si aucune donnée n'est transmise, afficher un message d'erreur.
       return const Scaffold(
         body: Center(
           child: Text("Aucune donnée reçue"),
@@ -145,6 +160,8 @@ class _RoleScreenState extends State<RoleScreen> {
 
                 const SizedBox(height: 26),
 
+                // Option de rôle Candidate. Lorsqu'elle est sélectionnée,
+                // elle change l'état local `selected` à 0.
                 _RoleCard(
                   title: "Candidate",
                   subtitle: "Find jobs, apply, and track your applications.",
@@ -155,6 +172,8 @@ class _RoleScreenState extends State<RoleScreen> {
 
                 const SizedBox(height: 14),
 
+                // Option de rôle Recruiter. Elle active le rôle recruteur
+                // et met à jour l'interface pour refléter la sélection.
                 _RoleCard(
                   title: "Recruiter",
                   subtitle: "Post jobs and manage candidates easily.",
@@ -207,6 +226,8 @@ class _RoleScreenState extends State<RoleScreen> {
   }
 }
 
+// Carte représentant une option de rôle dans l'écran d'inscription.
+// Elle affiche un titre, un sous-texte, une icône et un état de sélection.
 class _RoleCard extends StatelessWidget {
   final String title;
   final String subtitle;
@@ -226,6 +247,8 @@ class _RoleCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Carte tactile qui réagit au toucher de l'utilisateur.
+    // Le style change visuellement selon l'état `isSelected`.
     return InkWell(
       borderRadius: BorderRadius.circular(20),
       onTap: onTap,

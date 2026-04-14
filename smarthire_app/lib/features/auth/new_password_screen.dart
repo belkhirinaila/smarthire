@@ -1,7 +1,12 @@
+// Import des packages nécessaires :
+// - dart:convert pour encoder/décoder le JSON utilisé dans les requêtes HTTP
+// - flutter/material.dart pour les widgets de l'interface utilisateur
+// - package:http pour envoyer les requêtes vers le backend
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
+// Widget étatful qui représente l'écran de réinitialisation du mot de passe.
 class NewPasswordScreen extends StatefulWidget {
   const NewPasswordScreen({super.key});
 
@@ -10,20 +15,24 @@ class NewPasswordScreen extends StatefulWidget {
 }
 
 class _NewPasswordScreenState extends State<NewPasswordScreen> {
+  // Couleur principale utilisée dans l'interface, notamment pour les boutons.
   static const Color primaryBlue = Color(0xFF1E6CFF);
 
-  // Etats pour afficher/masquer password
+  // Etats pour masquer ou afficher les champs de mot de passe.
+  // obscure1 correspond au champ "nouveau mot de passe".
+  // obscure2 correspond au champ "confirmation du mot de passe".
   bool obscure1 = true;
   bool obscure2 = true;
 
-  // Etat loading pour désactiver bouton
+  // Etat de chargement utilisé pour désactiver le bouton pendant la requête.
   bool isLoading = false;
 
-  // Controllers pour récupérer les valeurs saisies
+  // Contrôleurs pour récupérer et manipuler les valeurs saisies.
   final TextEditingController passwordController = TextEditingController();
   final TextEditingController confirmController = TextEditingController();
 
   @override
+  // Méthode appelée lorsque ce State est supprimé. Elle libère les ressources des contrôleurs.
   void dispose() {
     passwordController.dispose();
     confirmController.dispose();
@@ -33,16 +42,18 @@ class _NewPasswordScreenState extends State<NewPasswordScreen> {
   /// ==============================
   /// Fonction principale: Reset Password
   /// ==============================
+  // Fonction appelée lors de la soumission du formulaire pour mettre à jour le mot de passe.
+  // Elle effectue plusieurs validations avant d'envoyer la requête au backend.
   Future<void> resetPassword() async {
     final password = passwordController.text.trim();
     final confirm = confirmController.text.trim();
 
-    // 🔹 Récupérer email depuis navigation (arguments)
+    // Récupération de l'email transmis depuis l'écran précédent via les arguments de navigation.
     final args =
         ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
     final email = args['email'];
 
-    // 🔹 Vérifier champs vides
+    // Vérifications côté client avant l'envoi de la requête : champs requis.
     if (password.isEmpty || confirm.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Tous les champs sont obligatoires")),
@@ -50,7 +61,7 @@ class _NewPasswordScreenState extends State<NewPasswordScreen> {
       return;
     }
 
-    // 🔹 Vérifier longueur minimale
+    // Vérification de la longueur minimale du mot de passe pour sécurité.
     if (password.length < 6) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -60,7 +71,7 @@ class _NewPasswordScreenState extends State<NewPasswordScreen> {
       return;
     }
 
-    // 🔹 Vérifier correspondance password
+    // Vérification que le mot de passe et sa confirmation sont identiques.
     if (password != confirm) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -70,12 +81,13 @@ class _NewPasswordScreenState extends State<NewPasswordScreen> {
       return;
     }
 
+    // Activation de l'indicateur de chargement et désactivation du bouton.
     setState(() {
       isLoading = true;
     });
 
     try {
-      // 🔹 Envoyer requête au backend
+      // Envoi de la requête POST au backend avec l'email et le nouveau mot de passe.
       final response = await http.post(
         Uri.parse("http://127.0.0.1:5000/api/auth/reset-password"),
         headers: {"Content-Type": "application/json"},
@@ -89,23 +101,24 @@ class _NewPasswordScreenState extends State<NewPasswordScreen> {
 
       if (!mounted) return;
 
+      // Si le backend retourne un succès, on redirige vers l'écran de confirmation.
       if (response.statusCode == 200) {
-        // 🔹 Succès → aller à écran confirmation
         Navigator.pushReplacementNamed(context, '/password-success');
       } else {
-        // 🔹 Erreur backend
+        // En cas d'erreur, on affiche le message renvoyé par le serveur.
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(data['message'] ?? "Erreur")),
         );
       }
     } catch (e) {
-      // 🔹 Erreur serveur
+      // Gestion des erreurs réseau ou exceptions inattendues.
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Erreur serveur")),
       );
     } finally {
+      // Arrêt de l'indicateur de chargement quel que soit le résultat.
       if (!mounted) return;
 
       setState(() {
@@ -115,9 +128,10 @@ class _NewPasswordScreenState extends State<NewPasswordScreen> {
   }
 
   @override
+  // Construction de l'interface utilisateur de l'écran de réinitialisation.
   Widget build(BuildContext context) {
     return Scaffold(
-      // 🔹 Important pour éviter overflow avec clavier
+      // Permet à l'écran de se redimensionner lorsque le clavier apparaît.
       resizeToAvoidBottomInset: true,
 
       body: Container(
@@ -131,7 +145,7 @@ class _NewPasswordScreenState extends State<NewPasswordScreen> {
         ),
 
         child: SafeArea(
-          // 🔹 Scroll pour éviter overflow
+          // Scroll pour éviter les débordements quand le clavier est ouvert.
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 22),
 
@@ -141,7 +155,7 @@ class _NewPasswordScreenState extends State<NewPasswordScreen> {
 
                 const SizedBox(height: 10),
 
-                /// 🔹 Header
+                /// En-tête de l'écran avec bouton retour et titre.
                 Row(
                   children: [
                     IconButton(
@@ -164,7 +178,7 @@ class _NewPasswordScreenState extends State<NewPasswordScreen> {
 
                 const SizedBox(height: 26),
 
-                /// 🔹 Titre principal
+                /// Titre principal de l'écran qui indique l'action attendue.
                 const Text(
                   "Set New\nPassword",
                   style: TextStyle(
@@ -176,7 +190,7 @@ class _NewPasswordScreenState extends State<NewPasswordScreen> {
 
                 const SizedBox(height: 10),
 
-                /// 🔹 Description
+                /// Description d'aide pour préciser les exigences du nouveau mot de passe.
                 Text(
                   "Your new password must be different from\npreviously used passwords.",
                   style: TextStyle(
@@ -187,7 +201,7 @@ class _NewPasswordScreenState extends State<NewPasswordScreen> {
 
                 const SizedBox(height: 34),
 
-                /// 🔹 Champ password
+                /// Champ pour saisir le nouveau mot de passe.
                 const Text("New Password",
                     style: TextStyle(color: Colors.white70)),
                 const SizedBox(height: 10),
@@ -200,7 +214,7 @@ class _NewPasswordScreenState extends State<NewPasswordScreen> {
 
                 const SizedBox(height: 26),
 
-                /// 🔹 Champ confirmation
+                /// Champ pour confirmer le nouveau mot de passe.
                 const Text("Confirm New Password",
                     style: TextStyle(color: Colors.white70)),
                 const SizedBox(height: 10),
@@ -213,7 +227,8 @@ class _NewPasswordScreenState extends State<NewPasswordScreen> {
 
                 const SizedBox(height: 40),
 
-                /// 🔹 Bouton
+                /// Bouton de validation qui déclenche la réinitialisation.
+                /// Il est désactivé tant que la requête est en cours.
                 SizedBox(
                   width: double.infinity,
                   height: 56,
@@ -246,6 +261,8 @@ class _NewPasswordScreenState extends State<NewPasswordScreen> {
 /// ==============================
 /// Champ password réutilisable
 /// ==============================
+/// Ce widget encapsule le comportement d'un champ de saisie masqué,
+/// avec une icône permettant de basculer l'affichage du texte.
 class _PasswordInput extends StatelessWidget {
   final TextEditingController controller;
   final bool obscure;
@@ -258,6 +275,7 @@ class _PasswordInput extends StatelessWidget {
   });
 
   @override
+  // Construction du champ de mot de passe avec icône de visibilité.
   Widget build(BuildContext context) {
     return TextField(
       controller: controller,
@@ -272,6 +290,7 @@ class _PasswordInput extends StatelessWidget {
           borderRadius: BorderRadius.circular(30),
         ),
 
+        // Icône affichée à droite pour basculer l'affichage du mot de passe.
         suffixIcon: IconButton(
           onPressed: onToggle,
           icon: Icon(

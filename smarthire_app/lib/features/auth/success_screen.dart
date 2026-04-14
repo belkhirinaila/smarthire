@@ -1,12 +1,18 @@
 import 'package:flutter/material.dart';
 
+// Ecran de succès affiché après la création du compte ou la validation OTP.
+// Il présente une confirmation visuelle et offre deux actions principales :
+// 1) aller vers le tableau de bord
+// 2) compléter son profil selon le rôle.
 class SuccessScreen extends StatelessWidget {
   const SuccessScreen({super.key});
 
+  // Couleur principale utilisée pour les éléments interactifs et les accents.
   static const Color primaryBlue = Color(0xFF1E6CFF);
 
   @override
   Widget build(BuildContext context) {
+    // Structure principale de l'écran : un Scaffold avec un fond en dégradé.
     return Scaffold(
       body: Container(
         width: double.infinity,
@@ -18,6 +24,7 @@ class SuccessScreen extends StatelessWidget {
           ),
         ),
         child: SafeArea(
+          // Padding horizontal pour conserver des marges sur les côtés.
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 22),
             child: Column(
@@ -35,7 +42,8 @@ class SuccessScreen extends StatelessWidget {
 
                 const Spacer(),
 
-                // Big check circle
+                // Illustration principale : un grand cercle de confirmation avec
+                // une coche au centre, renforçant visuellement le succès.
                 Container(
                   width: 160,
                   height: 160,
@@ -71,7 +79,8 @@ class SuccessScreen extends StatelessWidget {
                   ),
                 ),
 
-                // small confetti squares (simple)
+                // Petite animation de félicitations : carrés colorés disposés
+                // en forme de confettis pour renforcer le message de réussite.
                 const SizedBox(height: 18),
                 Opacity(
                   opacity: 0.35,
@@ -99,6 +108,7 @@ class SuccessScreen extends StatelessWidget {
 
                 const SizedBox(height: 26),
 
+                // Message principal de confirmation affiché en grand.
                 const Text(
                   "Account Created!",
                   textAlign: TextAlign.center,
@@ -123,15 +133,20 @@ class SuccessScreen extends StatelessWidget {
 
                 const Spacer(),
 
-                // Button 1
+                // Premier bouton d'action : redirige vers le tableau de bord adapté au rôle.
                 SizedBox(
                   width: double.infinity,
                   height: 56,
                   child: ElevatedButton(
-                    onPressed: () {
-                      // TODO: Go to Dashboard screen
-                      // Navigator.pushReplacement(...);
-                    },
+                 onPressed: () {
+                    final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
+                   final role = args['role'];
+                  if (role == "candidate") {
+                    Navigator.pushReplacementNamed(context, '/candidate');
+                 } else {
+                    Navigator.pushReplacementNamed(context, '/company');
+                  }
+                  },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: primaryBlue,
                       foregroundColor: Colors.white,
@@ -157,14 +172,21 @@ class SuccessScreen extends StatelessWidget {
 
                 const SizedBox(height: 12),
 
-                // Button 2 (outline)
+                // Deuxième bouton d'action : propose de compléter le profil
+                // après la création du compte, avec navigation dépendante du rôle.
                 SizedBox(
                   width: double.infinity,
                   height: 56,
                   child: OutlinedButton(
                     onPressed: () {
-                      // TODO: Complete profile screen
-                    },
+                        final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
+  final role = args['role'];
+  if (role == "candidate") {
+    Navigator.pushReplacementNamed(context, '/candidate');
+  } else {
+    Navigator.pushReplacementNamed(context, '/recruiter');
+  }
+},
                     style: OutlinedButton.styleFrom(
                       foregroundColor: Colors.white,
                       side: BorderSide(color: Colors.white.withOpacity(0.18)),

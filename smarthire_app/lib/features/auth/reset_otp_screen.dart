@@ -1,9 +1,17 @@
+// Import des bibliothèques nécessaires :
+// - dart:async pour le timer de compte à rebours.
+// - dart:convert pour encoder/décoder le JSON des requêtes HTTP.
+// - flutter/material.dart pour les widgets visuels.
+// - flutter/services.dart pour le filtrage des entrées numériques.
+// - package:http pour appel au backend.
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 
+// Ecran de saisie du code OTP envoyé lors de la réinitialisation de mot de passe.
+// L'email est passé depuis l'écran précédent afin de l'utiliser dans les requêtes.
 class ResetOtpScreen extends StatefulWidget {
   final String email;
 
@@ -14,31 +22,35 @@ class ResetOtpScreen extends StatefulWidget {
 }
 
 class _ResetOtpScreenState extends State<ResetOtpScreen> {
+  // Couleur principale de l'écran utilisée pour le bouton et les éléments focusés.
   static const Color primaryBlue = Color(0xFF1E6CFF);
 
-  /// Controllers des 4 cases OTP
+  // Contrôleurs de texte pour les 4 champs OTP individuels.
+  // Chaque controller contient un seul chiffre.
   final _c1 = TextEditingController();
   final _c2 = TextEditingController();
   final _c3 = TextEditingController();
   final _c4 = TextEditingController();
 
-  /// Focus nodes pour passer automatiquement d'une case à l'autre
+  // FocusNodes pour permettre la navigation automatique entre les champs OTP.
+  // Lorsqu'un chiffre est saisi, le focus passe à la case suivante.
   final _f1 = FocusNode();
   final _f2 = FocusNode();
   final _f3 = FocusNode();
   final _f4 = FocusNode();
 
-  /// Timer pour le resend
+  // Timer utilisé pour bloquer le renvoi de code pendant 59 secondes.
   Timer? _timer;
   int _seconds = 59;
 
-  /// Etats de chargement
+  // Etats d'affichage de chargement pour les boutons Verify et Resend.
   bool isLoading = false;
   bool isResending = false;
 
   @override
   void initState() {
     super.initState();
+    // Démarrage du compte à rebours dès que l'écran est affiché.
     _startTimer();
   }
 
@@ -46,16 +58,21 @@ class _ResetOtpScreenState extends State<ResetOtpScreen> {
   /// Démarrer le compte à rebours
   /// ==============================
   void _startTimer() {
+    // Annule tout timer précédent pour éviter plusieurs timers actifs.
     _timer?.cancel();
 
+    // Réinitialise le compteur à 59 secondes.
     setState(() => _seconds = 59);
 
+    // Lance un timer périodique qui décompte chaque seconde.
     _timer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (!mounted) return;
 
       if (_seconds <= 0) {
+        // Lorsque le temps est écoulé, arrêter le timer.
         t.cancel();
       } else {
+        // Décrémenter le compteur et redessiner l'écran.
         setState(() => _seconds--);
       }
     });
@@ -87,10 +104,12 @@ class _ResetOtpScreenState extends State<ResetOtpScreen> {
   /// ==============================
   /// Vérifier OTP avec le backend
   /// ==============================
+  /// Cette méthode envoie le code OTP saisi au serveur pour validation.
+  /// Si le code est correct, elle redirige l'utilisateur vers l'étape suivante.
   Future<void> _verify() async {
     final otp = code;
 
-    /// Vérifier si les 4 chiffres sont remplis
+    // Vérifie que l'utilisateur a bien saisi les 4 chiffres du code.
     if (otp.length != 4) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Entrez le code complet")),
@@ -104,7 +123,7 @@ class _ResetOtpScreenState extends State<ResetOtpScreen> {
 
     try {
       final response = await http.post(
-        Uri.parse("http://127.0.0.1:5000/api/auth/verify-reset-otp"),
+        Uri.parse("http://192.168.100.47:5000/api/auth/verify-otp"),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
           "email": widget.email,
@@ -148,8 +167,10 @@ class _ResetOtpScreenState extends State<ResetOtpScreen> {
   /// ==============================
   /// Renvoyer un nouveau code OTP
   /// ==============================
+  /// Cette fonction est déclenchée lorsque l'utilisateur demande un nouveau code.
+  /// Elle est désactivée tant que le compte à rebours n'est pas terminé.
   Future<void> _resendCode() async {
-    /// Empêcher le resend avant la fin du timer
+    // Empêche le renvoi tant que le délai est encore en cours.
     if (_seconds > 0) return;
 
     setState(() {
@@ -158,7 +179,7 @@ class _ResetOtpScreenState extends State<ResetOtpScreen> {
 
     try {
       final response = await http.post(
-        Uri.parse("http://127.0.0.1:5000/api/auth/forgot-password"),
+        Uri.parse("http://192.168.100.47:5000/api/auth/resend-otp"),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
           "email": widget.email,
@@ -200,8 +221,9 @@ class _ResetOtpScreenState extends State<ResetOtpScreen> {
   Widget build(BuildContext context) {
     final resendEnabled = _seconds == 0;
 
+    // Construction de l'interface utilisateur complète de l'écran.
     return Scaffold(
-      /// Permet à l'écran de s'adapter au clavier
+      /// Permet à l'écran de s'adapter au clavier.
       resizeToAvoidBottomInset: true,
 
       body: Container(
@@ -494,6 +516,7 @@ class _ResetOtpScreenState extends State<ResetOtpScreen> {
 /// Widget OTP BOX
 /// Chaque case contient un seul chiffre
 /// ==============================
+/// Widget réutilisable pour une case du code OTP, gérant le focus et la saisie.
 class _WhiteOtpBox extends StatelessWidget {
   static const Color primaryBlue = Color(0xFF1E6CFF);
 
@@ -545,7 +568,8 @@ class _WhiteOtpBox extends StatelessWidget {
           ),
         ),
         onChanged: (v) {
-          /// Si un chiffre est saisi -> aller à la case suivante
+          // Lorsque l'utilisateur saisit un chiffre, le focus passe automatiquement
+          // au champ suivant. Si c'est le dernier champ, la validation est déclenchée.
           if (v.isNotEmpty) {
             if (next != null) {
               FocusScope.of(context).requestFocus(next);
@@ -554,7 +578,8 @@ class _WhiteOtpBox extends StatelessWidget {
               onDone?.call();
             }
           } else {
-            /// Si la case devient vide -> revenir à la case précédente
+            // Si l'utilisateur supprime le chiffre et que le champ devient vide,
+            // le focus revient sur le champ précédent.
             if (prev != null) {
               FocusScope.of(context).requestFocus(prev);
             }

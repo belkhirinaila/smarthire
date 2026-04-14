@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 
-
+// Écran de confirmation de mise à jour du mot de passe.
+// Il est affiché lorsque le mot de passe a été réinitialisé avec succès.
 class PasswordSuccessScreen extends StatelessWidget {
   const PasswordSuccessScreen({super.key});
 
+  // Couleur principale utilisée pour les boutons et les éléments interactifs.
   static const Color primaryBlue = Color(0xFF1E6CFF);
 
   @override
   Widget build(BuildContext context) {
+    // Construction de l'interface complète de l'écran.
     return Scaffold(
       body: Container(
         width: double.infinity,
@@ -25,7 +28,7 @@ class PasswordSuccessScreen extends StatelessWidget {
               children: [
                 const SizedBox(height: 14),
 
-                // Close button
+                // Bouton de fermeture en haut à droite pour revenir à l'écran précédent.
                 Align(
                   alignment: Alignment.topRight,
                   child: Container(
@@ -61,7 +64,7 @@ class PasswordSuccessScreen extends StatelessWidget {
 
                 const SizedBox(height: 30),
 
-                // Title
+                // Titre principal indiquant le succès de l'opération.
                 const Text(
                   "Password Updated\nSuccessfully!",
                   textAlign: TextAlign.center,
@@ -75,7 +78,7 @@ class PasswordSuccessScreen extends StatelessWidget {
 
                 const SizedBox(height: 14),
 
-                // Subtitle
+                // Description secondaire qui rassure l'utilisateur et explique la suite.
                 Text(
                   "Your security is our priority. You can\nnow use your new password to sign\nin to your SmartHire DZ account.",
                   textAlign: TextAlign.center,
@@ -88,7 +91,7 @@ class PasswordSuccessScreen extends StatelessWidget {
 
                 const Spacer(),
 
-                // Proceed Button
+                // Bouton « Proceed to Login » qui envoie l'utilisateur vers l'écran de connexion.
                 SizedBox(
                   width: double.infinity,
                   height: 56,
@@ -116,7 +119,7 @@ class PasswordSuccessScreen extends StatelessWidget {
 
                 const SizedBox(height: 20),
 
-                // Help text
+                // Texte d'aide pour inviter l'utilisateur à contacter le support si nécessaire.
                 Text(
                   "Need help? Contact support",
                   style: TextStyle(

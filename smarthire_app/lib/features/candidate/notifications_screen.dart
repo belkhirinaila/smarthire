@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+// Écran des notifications du candidat.
+// Il affiche les notifications reçues, permet de les marquer comme lues,
+// et présente un résumé du nombre de notifications non lues.
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
 
@@ -11,13 +14,16 @@ class NotificationsScreen extends StatefulWidget {
 }
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
+  // Couleurs utilisées dans l'interface notifications.
   static const Color primaryBlue = Color(0xFF1E6CFF);
   static const Color backgroundTop = Color(0xFF08162D);
   static const Color backgroundBottom = Color(0xFF050A12);
   static const Color cardColor = Color(0xFF121C31);
 
+  // URL de base vers l'API backend.
   static const String baseUrl = 'http://192.168.100.47:5000/api';
 
+  // Données des notifications et états de chargement / marquage.
   List<dynamic> notifications = [];
   bool isLoading = true;
   bool isMarkingAll = false;
@@ -26,19 +32,23 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   @override
   void initState() {
     super.initState();
+    // Charge les notifications dès que l'écran est initialisé.
     fetchNotifications();
   }
 
+  // Récupère le token d'authentification stocké localement.
   Future<String?> _getToken() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString('token');
   }
 
+  // Charge les notifications depuis l'API pour l'utilisateur connecté.
   Future<void> fetchNotifications() async {
     try {
       final token = await _getToken();
 
       if (token == null || token.isEmpty) {
+        // Si le token est absent, on affiche un message d'erreur.
         setState(() {
           isLoading = false;
           errorMessage = "Token introuvable. Veuillez vous reconnecter.";
@@ -57,12 +67,15 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 200) {
+        // Si la requête réussit, on stocke les notifications et on désactive
+        // l'état de chargement.
         setState(() {
           notifications = data['notifications'] ?? [];
           isLoading = false;
           errorMessage = null;
         });
       } else {
+        // Si l'API renvoie une erreur, on affiche le message renvoyé.
         setState(() {
           isLoading = false;
           errorMessage =
@@ -70,6 +83,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         });
       }
     } catch (e) {
+      // En cas d'erreur réseau, on affiche un message générique.
       setState(() {
         isLoading = false;
         errorMessage = 'Erreur de connexion au serveur';
@@ -77,6 +91,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
   }
 
+  // Marque une notification comme lue côté serveur, puis met à jour la
+  // notification correspondante localement si l'appel réussit.
   Future<void> markAsRead(int id) async {
     try {
       final token = await _getToken();
@@ -102,6 +118,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     } catch (_) {}
   }
 
+  // Marque toutes les notifications comme lues en appelant l'API.
+  // Cette méthode affiche également un indicateur de chargement temporaire.
   Future<void> markAllAsRead() async {
     try {
       setState(() {
@@ -152,6 +170,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
   }
 
+  // Calcule le nombre de notifications non lues.
   int get unreadCount {
     return notifications.where((item) {
       final value = item['is_read'];
@@ -159,6 +178,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }).length;
   }
 
+  // Retourne une icône selon le type de notification.
   IconData _iconForType(String type) {
     switch (type) {
       case 'job':
@@ -172,6 +192,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
   }
 
+  // Retourne une couleur d'accentuation en fonction du type de notification.
   Color _colorForType(String type) {
     switch (type) {
       case 'job':
@@ -185,6 +206,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
   }
 
+  // Formate la date/heure reçue en chaîne lisible.
   String _formatDate(dynamic raw) {
     if (raw == null) return '';
     final text = raw.toString();
@@ -196,6 +218,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Construction de l'interface principale avec barre supérieure,
+    // carte de résumé et contenu dynamique.
     return Scaffold(
       backgroundColor: backgroundBottom,
       body: Container(
@@ -232,6 +256,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     );
   }
 
+  // Barre supérieure avec retour et action 'Marquer tout comme lu'.
   Widget _buildTopBar(BuildContext context) {
     return Row(
       children: [
@@ -291,6 +316,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     );
   }
 
+  // Affiche le résumé du nombre de notifications non lues.
   Widget _buildSummaryCard() {
     return Container(
       width: double.infinity,
@@ -346,6 +372,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     );
   }
 
+  // Corps principal de l'écran, qui gère les différents états.
   Widget _buildBody() {
     if (isLoading) {
       return const Center(

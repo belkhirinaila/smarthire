@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+// Écran principal de la boîte de réception des demandes pour le candidat.
+// Il récupère les demandes depuis l'API, affiche des onglets de filtrage,
+// et permet d'accéder au détail d'une demande.
 class RequestsInboxScreen extends StatefulWidget {
   const RequestsInboxScreen({super.key});
 
@@ -11,17 +14,22 @@ class RequestsInboxScreen extends StatefulWidget {
 }
 
 class _RequestsInboxScreenState extends State<RequestsInboxScreen> {
+  // Couleurs de l'interface utilisées dans tout l'écran.
   static const Color primaryBlue = Color(0xFF1E6CFF);
   static const Color backgroundTop = Color(0xFF08162D);
   static const Color backgroundBottom = Color(0xFF050A12);
   static const Color cardColor = Color(0xFF121C31);
 
+  // URL de base pour les appels vers l'API backend.
   static const String baseUrl = 'http://192.168.100.47:5000/api';
 
+  // Contrôleur pour le champ de recherche.
   final TextEditingController searchController = TextEditingController();
 
+  // Index de l'onglet sélectionné dans le filtre de demande.
   int selectedTabIndex = 0;
 
+  // Libellés des onglets de filtrage des demandes.
   final List<String> tabs = [
     "All",
     "Pending",
@@ -29,6 +37,7 @@ class _RequestsInboxScreenState extends State<RequestsInboxScreen> {
     "Rejected",
   ];
 
+  // Données des demandes reçues, état de chargement et message d'erreur.
   List<dynamic> requests = [];
   bool isLoading = true;
   String? errorMessage;
@@ -36,21 +45,26 @@ class _RequestsInboxScreenState extends State<RequestsInboxScreen> {
   @override
   void initState() {
     super.initState();
+    // Au démarrage de l'écran, lance la récupération des demandes.
     fetchRequests();
   }
 
   @override
   void dispose() {
+    // Libère le contrôleur de recherche lors de la destruction de l'écran.
     searchController.dispose();
     super.dispose();
   }
 
+  // Méthode asynchrone qui récupère les demandes reçues depuis le serveur.
   Future<void> fetchRequests() async {
     try {
+      // Récupère le token stocké localement pour l'authentification.
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('token');
 
       if (token == null || token.isEmpty) {
+        // Si le token n'existe pas, on affiche une erreur et on quitte.
         setState(() {
           isLoading = false;
           errorMessage = "Token introuvable. Veuillez vous reconnecter.";
@@ -58,6 +72,7 @@ class _RequestsInboxScreenState extends State<RequestsInboxScreen> {
         return;
       }
 
+      // Envoie la requête GET à l'API pour obtenir les demandes reçues.
       final response = await http.get(
         Uri.parse('$baseUrl/requests/received'),
         headers: {
@@ -65,15 +80,18 @@ class _RequestsInboxScreenState extends State<RequestsInboxScreen> {
         },
       );
 
+      // Decode la réponse JSON pour récupérer le contenu.
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 200) {
+        // Si la réponse est bonne, met à jour la liste des demandes.
         setState(() {
           requests = data['requests'] ?? [];
           isLoading = false;
           errorMessage = null;
         });
       } else {
+        // Si le serveur renvoie une erreur, affiche le message correspondant.
         setState(() {
           isLoading = false;
           errorMessage =
@@ -81,6 +99,7 @@ class _RequestsInboxScreenState extends State<RequestsInboxScreen> {
         });
       }
     } catch (e) {
+      // En cas d'exception réseau ou JSON invalide, on affiche une erreur.
       setState(() {
         isLoading = false;
         errorMessage = "Erreur de connexion au serveur";
@@ -88,16 +107,19 @@ class _RequestsInboxScreenState extends State<RequestsInboxScreen> {
     }
   }
 
+  // Ouvre l'écran de détails de la demande puis recharge la liste au retour.
   void openRequestDetails(Map<String, dynamic> request) {
     Navigator.pushNamed(
       context,
       '/request-decision',
       arguments: request,
     ).then((_) {
+      // Recharge les demandes après la navigation retour.
       fetchRequests();
     });
   }
 
+  // Retourne une couleur de badge en fonction du statut de la demande.
   Color getStatusColor(String status) {
     switch (status.toLowerCase()) {
       case 'approved':
@@ -119,9 +141,12 @@ class _RequestsInboxScreenState extends State<RequestsInboxScreen> {
     return raw;
   }
 
+  // Liste filtrée des demandes selon la recherche et l'onglet sélectionné.
   List<dynamic> get filteredRequests {
+    // Partie de filtrage : on clone la liste complète pour éviter de modifier l'original.
     List<dynamic> result = List.from(requests);
 
+    // Applique le filtre de recherche textuelle si un terme est saisi.
     final query = searchController.text.trim().toLowerCase();
     if (query.isNotEmpty) {
       result = result.where((request) {
@@ -132,6 +157,7 @@ class _RequestsInboxScreenState extends State<RequestsInboxScreen> {
       }).toList();
     }
 
+    // Applique le filtre par onglet selon l'index sélectionné.
     if (selectedTabIndex == 1) {
       result = result
           .where((request) =>
@@ -155,6 +181,7 @@ class _RequestsInboxScreenState extends State<RequestsInboxScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Construction du Scaffold principal de l'écran, contenant le corps et la navigation.
     return Scaffold(
       backgroundColor: backgroundBottom,
       extendBody: true,
@@ -195,6 +222,7 @@ class _RequestsInboxScreenState extends State<RequestsInboxScreen> {
     );
   }
 
+  // Gère le contenu principal de l'écran : état de chargement, erreur, vide ou liste.
   Widget _buildBodyContent() {
     if (isLoading) {
       return const Center(
@@ -206,6 +234,7 @@ class _RequestsInboxScreenState extends State<RequestsInboxScreen> {
     }
 
     if (errorMessage != null) {
+      // Affiche une carte d'erreur avec un bouton de réessai.
       return Container(
         width: double.infinity,
         padding: const EdgeInsets.all(24),
@@ -241,14 +270,18 @@ class _RequestsInboxScreenState extends State<RequestsInboxScreen> {
     }
 
     if (filteredRequests.isEmpty) {
+      // Si aucun résultat ne correspond aux filtres, affiche un état vide.
       return _buildEmptyState();
     }
 
+    // Affiche la liste des demandes filtrées.
     return Column(
       children: filteredRequests.map((request) {
         final status = (request["status"] ?? "pending").toString();
         final badgeColor = getStatusColor(status);
 
+        // Prépare une version du request enrichie avec les champs nécessaires
+        // pour l'affichage de la carte et la navigation vers le détail.
         final Map<String, dynamic> mappedRequest = {
           ...request as Map<String, dynamic>,
          "company": "Recruiter #${request["recruiter_id"] ?? ""}",
@@ -377,6 +410,7 @@ class _RequestsInboxScreenState extends State<RequestsInboxScreen> {
     );
   }
 
+  // Barre supérieure de l'écran avec icônes et titre central.
   Widget _buildTopBar() {
     return Row(
       children: [
@@ -434,6 +468,7 @@ class _RequestsInboxScreenState extends State<RequestsInboxScreen> {
     );
   }
 
+  // Barre de recherche textuelle pour filtrer les demandes.
   Widget _buildSearchBar() {
     return Container(
       height: 58,
@@ -463,6 +498,7 @@ class _RequestsInboxScreenState extends State<RequestsInboxScreen> {
     );
   }
 
+  // Liste d'onglets horizontaux pour filtrer par statut de demande.
   Widget _buildTabs() {
     return SizedBox(
       height: 36,
@@ -511,6 +547,7 @@ class _RequestsInboxScreenState extends State<RequestsInboxScreen> {
     );
   }
 
+  // Badge de statut affiché sur chaque demande.
   Widget _buildTypeBadge({
     required String text,
     required Color color,
@@ -533,6 +570,7 @@ class _RequestsInboxScreenState extends State<RequestsInboxScreen> {
     );
   }
 
+  // Affiche un état vide lorsque aucune demande n'est disponible.
   Widget _buildEmptyState() {
     return Container(
       width: double.infinity,
@@ -563,6 +601,7 @@ class _RequestsInboxScreenState extends State<RequestsInboxScreen> {
     );
   }
 
+  // Barre de navigation inférieure avec accès aux principaux écrans candidat.
   Widget _buildBottomNav() {
     return Container(
       color: backgroundBottom,

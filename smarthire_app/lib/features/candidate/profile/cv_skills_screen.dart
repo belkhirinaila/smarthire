@@ -1,3 +1,11 @@
+// Import des bibliothèques nécessaires :
+// - dart:convert pour la sérialisation JSON.
+// - file_picker pour sélectionner un fichier CV.
+// - flutter/material.dart pour construire l'interface utilisateur.
+// - http et http_parser pour les requêtes multipart vers l'API.
+// - mime pour détecter le type MIME du fichier.
+// - shared_preferences pour récupérer le token d'authentification.
+// - url_launcher pour ouvrir le CV dans une application externe.
 import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
@@ -16,20 +24,27 @@ class CvSkillsScreen extends StatefulWidget {
 }
 
 class _CvSkillsScreenState extends State<CvSkillsScreen> {
+  // Couleurs réutilisées dans l'écran CV & compétences.
   static const Color kPrimaryBlue = Color(0xFF1E6CFF);
   static const Color kBackground = Color(0xFF050A12);
   static const Color kCard = Color(0xFF121C31);
 
+  // Points de terminaison API utilisés dans ce screen.
   static const String baseUrl = 'http://192.168.100.47:5000/api';
   static const String uploadsBaseUrl = 'http://192.168.100.47:5000/';
 
+  // États de l'écran : chargement et enregistrement en cours.
   bool isLoading = true;
   bool isSaving = false;
 
+  // Informations sur le CV affiché et le fichier sélectionné.
   String cvFileName = 'No CV uploaded';
   String? cvFilePath;
+  String? cvFileUrl;
+  PlatformFile? pickedFile;
   String? pickedFilePath;
 
+  // Contrôleur de champ pour ajouter une nouvelle compétence.
   final TextEditingController skillController = TextEditingController();
   List<Map<String, dynamic>> skills = [];
 
@@ -45,11 +60,13 @@ class _CvSkillsScreenState extends State<CvSkillsScreen> {
     super.dispose();
   }
 
+  // Récupère le token d'authentification stocké localement.
   Future<String?> getToken() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString('token');
   }
 
+  // Charge les données du CV et des compétences depuis l'API.
   Future<void> loadData() async {
     try {
       setState(() {
@@ -65,23 +82,35 @@ class _CvSkillsScreenState extends State<CvSkillsScreen> {
         return;
       }
 
-      final cvRes = await http.get(
-        Uri.parse('$baseUrl/cv/me'),
-        headers: {'Authorization': 'Bearer $token'},
-      );
+      // Lance les deux requêtes en parallèle pour réduire la latence.
+      final responses = await Future.wait([
+        http.get(
+          Uri.parse('$baseUrl/cv/me'),
+          headers: {'Authorization': 'Bearer $token'},
+        ),
+        http.get(
+          Uri.parse('$baseUrl/skills/me'),
+          headers: {'Authorization': 'Bearer $token'},
+        ),
+      ]);
 
-      final skillsRes = await http.get(
-        Uri.parse('$baseUrl/skills/me'),
-        headers: {'Authorization': 'Bearer $token'},
-      );
+      final cvRes = responses[0];
+      final skillsRes = responses[1];
 
       if (cvRes.statusCode == 200) {
         final data = jsonDecode(cvRes.body);
         cvFileName = (data['cv']['file_name'] ?? 'No CV uploaded').toString();
         cvFilePath = data['cv']['file_path']?.toString();
+        cvFileUrl = data['cv']['file_url']?.toString();
+        if (cvFileUrl == null && cvFilePath != null) {
+          final normalized = cvFilePath!.replaceAll('\\', '/');
+          final fileName = normalized.split('/').last;
+          cvFileUrl = '${uploadsBaseUrl}uploads/$fileName';
+        }
       } else {
         cvFileName = 'No CV uploaded';
         cvFilePath = null;
+        cvFileUrl = null;
       }
 
       if (skillsRes.statusCode == 200) {
@@ -101,6 +130,7 @@ class _CvSkillsScreenState extends State<CvSkillsScreen> {
     }
   }
 
+  // Ouvre le sélecteur de fichier pour choisir un CV au format PDF.
   Future<void> pickFile() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
@@ -109,14 +139,16 @@ class _CvSkillsScreenState extends State<CvSkillsScreen> {
 
     if (result != null && result.files.isNotEmpty) {
       setState(() {
-        pickedFilePath = result.files.first.path;
-        cvFileName = result.files.first.name;
+        pickedFile = result.files.first;
+        pickedFilePath = pickedFile?.path;
+        cvFileName = pickedFile?.name ?? 'No CV uploaded';
       });
     }
   }
 
+  // Envoie le CV sélectionné vers l'API si un fichier est présent.
   Future<bool> uploadCv() async {
-    if (pickedFilePath == null) return true;
+    if (pickedFile == null) return true;
 
     try {
       final token = await getToken();
@@ -130,22 +162,43 @@ class _CvSkillsScreenState extends State<CvSkillsScreen> {
 
       request.headers['Authorization'] = 'Bearer $token';
 
-      final mimeType = lookupMimeType(pickedFilePath!) ?? 'application/pdf';
+      // Détection du type MIME du fichier PDF avant l'envoi.
+      final filePath = pickedFilePath;
+      final fileName = pickedFile?.name ?? 'cv.pdf';
+      final mimeType = lookupMimeType(filePath ?? fileName) ?? 'application/pdf';
       final split = mimeType.split('/');
 
-      request.files.add(
-        await http.MultipartFile.fromPath(
-          'cv',
-          pickedFilePath!,
-          contentType: MediaType(split[0], split[1]),
-        ),
-      );
+      if (filePath != null) {
+        request.files.add(
+          await http.MultipartFile.fromPath(
+            'cv',
+            filePath,
+            contentType: MediaType(split[0], split[1]),
+          ),
+        );
+      } else if (pickedFile?.bytes != null) {
+        request.files.add(
+          http.MultipartFile.fromBytes(
+            'cv',
+            pickedFile!.bytes!,
+            filename: fileName,
+            contentType: MediaType(split[0], split[1]),
+          ),
+        );
+      } else {
+        return false;
+      }
 
-      final response = await request.send();
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
 
       if (response.statusCode == 200 || response.statusCode == 201) {
+        // Recharge seulement les données de CV après un upload réussi.
+        debugPrint("UPLOAD SUCCESS");
+        debugPrint(response.body);
+        pickedFile = null;
         pickedFilePath = null;
-        await loadData();
+        await loadCv();
         return true;
       }
 
@@ -155,6 +208,11 @@ class _CvSkillsScreenState extends State<CvSkillsScreen> {
     }
   }
 
+
+
+
+
+  // Ajoute une compétence via l'API en utilisant le texte saisi.
   Future<void> addSkill() async {
     final text = skillController.text.trim();
     if (text.isEmpty) return;
@@ -162,7 +220,7 @@ class _CvSkillsScreenState extends State<CvSkillsScreen> {
     final token = await getToken();
     if (token == null || token.isEmpty) return;
 
-    await http.post(
+    final response = await http.post(
       Uri.parse('$baseUrl/skills'),
       headers: {
         'Content-Type': 'application/json',
@@ -171,34 +229,79 @@ class _CvSkillsScreenState extends State<CvSkillsScreen> {
       body: jsonEncode({'skill_name': text}),
     );
 
-    skillController.clear();
-    await loadData();
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      skillController.clear();
+      await loadSkills();
+    }
   }
 
+  // Supprime une compétence existante et met à jour la liste localement.
   Future<void> deleteSkill(int id) async {
     final token = await getToken();
     if (token == null || token.isEmpty) return;
 
-    await http.delete(
+    final response = await http.delete(
       Uri.parse('$baseUrl/skills/$id'),
       headers: {'Authorization': 'Bearer $token'},
     );
 
-    await loadData();
+    if (response.statusCode == 200 || response.statusCode == 204) {
+      skills.removeWhere((skill) => skill['id'] == id);
+      setState(() {});
+    }
   }
 
- Future<void> openCv() async {
-  if (cvFilePath == null || cvFilePath!.isEmpty) {
+  // Recharge uniquement la liste des compétences sans recharger tout l'écran.
+  Future<void> loadSkills() async {
+    final token = await getToken();
+    if (token == null || token.isEmpty) return;
+
+    final skillsRes = await http.get(
+      Uri.parse('$baseUrl/skills/me'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+
+    if (skillsRes.statusCode == 200) {
+      final data = jsonDecode(skillsRes.body);
+      skills = List<Map<String, dynamic>>.from(data['skills'] ?? []);
+      setState(() {});
+    }
+  }
+
+  // Recharge uniquement les données de CV sans toucher aux compétences.
+  Future<void> loadCv() async {
+    final token = await getToken();
+    if (token == null || token.isEmpty) return;
+
+    final cvRes = await http.get(
+      Uri.parse('$baseUrl/cv/me'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+
+    if (cvRes.statusCode == 200) {
+      final data = jsonDecode(cvRes.body);
+      cvFileName = (data['cv']['file_name'] ?? 'No CV uploaded').toString();
+      cvFilePath = data['cv']['file_path']?.toString();
+      cvFileUrl = data['cv']['file_url']?.toString();
+      if (cvFileUrl == null && cvFilePath != null) {
+        final normalized = cvFilePath!.replaceAll('\\', '/');
+        final fileName = normalized.split('/').last;
+        cvFileUrl = '${uploadsBaseUrl}uploads/$fileName';
+      }
+      setState(() {});
+    }
+  }
+
+  // Ouvre le CV dans une application externe s'il est disponible.
+  Future<void> openCv() async {
+  if (cvFileUrl == null || cvFileUrl!.isEmpty) {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text("Aucun CV disponible")),
     );
     return;
   }
 
-  final normalized = cvFilePath!.replaceAll('\\', '/');
-  final cleaned = normalized.replaceAll('uploads/', '');
-  final url = '${uploadsBaseUrl}uploads/$cleaned';
-  final uri = Uri.parse(url);
+  final uri = Uri.parse(cvFileUrl!);
 
   try {
     final opened = await launchUrl(
@@ -208,23 +311,33 @@ class _CvSkillsScreenState extends State<CvSkillsScreen> {
 
     if (!opened && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Impossible d'ouvrir le CV: $url")),
+        SnackBar(content: Text("Impossible d'ouvrir le CV: ${cvFileUrl!}")),
       );
     }
   } catch (e) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Erreur ouverture CV: $url")),
+      SnackBar(content: Text("Erreur ouverture CV: ${cvFileUrl!}")),
     );
   }
 }
 
+  // Enregistre les changements : ajoute la compétence en cours et upload le CV.
   Future<void> saveChanges() async {
     setState(() {
       isSaving = true;
     });
 
-    final ok = await uploadCv();
+    bool ok = true;
+
+    final pendingSkill = skillController.text.trim();
+    if (pendingSkill.isNotEmpty) {
+      await addSkill();
+    }
+
+    if (pickedFile != null) {
+      ok = await uploadCv();
+    }
 
     setState(() {
       isSaving = false;
@@ -241,6 +354,8 @@ class _CvSkillsScreenState extends State<CvSkillsScreen> {
     }
   }
 
+  // Carte d'affichage du CV actuel avec un bouton pour le consulter et
+  // un bouton permettant de choisir un nouveau fichier.
   Widget buildCvCard() {
     return Container(
       width: double.infinity,
@@ -286,6 +401,7 @@ class _CvSkillsScreenState extends State<CvSkillsScreen> {
     );
   }
 
+  // Section de saisie pour ajouter une nouvelle compétence au profil.
   Widget buildSkillInput() {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -323,6 +439,7 @@ class _CvSkillsScreenState extends State<CvSkillsScreen> {
     );
   }
 
+  // Liste des compétences affichées avec la possibilité de suppression.
   Widget buildSkillsList() {
     if (skills.isEmpty) {
       return Container(
@@ -369,6 +486,8 @@ class _CvSkillsScreenState extends State<CvSkillsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Affiche un écran de chargement tant que les données sont en cours de
+    // récupération depuis l'API.
     if (isLoading) {
       return const Scaffold(
         backgroundColor: kBackground,
@@ -378,6 +497,7 @@ class _CvSkillsScreenState extends State<CvSkillsScreen> {
       );
     }
 
+    // Interface principale du screen CV & compétences.
     return Scaffold(
       backgroundColor: kBackground,
       appBar: AppBar(

@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+// Écran de conversation directe entre le candidat et un recruteur.
+// Il gère l'initialisation de la conversation, l'envoi et la lecture des messages.
 class DirectChatThreadScreen extends StatefulWidget {
   const DirectChatThreadScreen({super.key});
 
@@ -11,20 +13,26 @@ class DirectChatThreadScreen extends StatefulWidget {
 }
 
 class _DirectChatThreadScreenState extends State<DirectChatThreadScreen> {
+  // Couleurs principales de l'écran et des bulles de message.
   static const Color primaryBlue = Color(0xFF1E6CFF);
   static const Color backgroundTop = Color(0xFF08162D);
   static const Color backgroundBottom = Color(0xFF050A12);
   static const Color myMessageColor = Color(0xFF1E6CFF);
   static const Color otherMessageColor = Color(0xFF121C31);
 
+  // URL de base vers l'API backend.
   static const String baseUrl = 'http://192.168.100.47:5000/api';
 
+  // Contrôleur pour le champ de saisie de message.
   final TextEditingController messageController = TextEditingController();
 
+  // État des messages et des chargements.
   List<dynamic> messages = [];
   bool isLoading = true;
   bool isSending = false;
   String? errorMessage;
+
+  // Identifiant de conversation et informations d'en-tête.
   int? conversationId;
   String company = "Recruiter";
   String title = "Direct Chat";
@@ -32,15 +40,20 @@ class _DirectChatThreadScreenState extends State<DirectChatThreadScreen> {
   @override
   void initState() {
     super.initState();
+    // Utilise microtask pour récupérer les arguments de navigation après
+    // que le widget soit monté et construire la conversation.
     Future.microtask(() => initializeConversation());
   }
 
   @override
   void dispose() {
+    // Libère le contrôleur de texte lorsque l'écran est détruit.
     messageController.dispose();
     super.dispose();
   }
 
+  // Initialise la conversation en récupérant les arguments de la route,
+  // puis crée ou récupère la conversation côté serveur.
   Future<void> initializeConversation() async {
     try {
       final args =
@@ -52,6 +65,7 @@ class _DirectChatThreadScreenState extends State<DirectChatThreadScreen> {
       final recruiterId = args?['recruiter_id'];
 
       if (recruiterId == null) {
+        // Si l'ID du recruteur n'est pas passé, on ne peut pas ouvrir la conversation.
         setState(() {
           isLoading = false;
           errorMessage = "Recruiter ID introuvable";
@@ -63,6 +77,7 @@ class _DirectChatThreadScreenState extends State<DirectChatThreadScreen> {
       final token = prefs.getString('token');
 
       if (token == null || token.isEmpty) {
+        // Si le token d'authentification est introuvable, on ne peut pas appeler l'API.
         setState(() {
           isLoading = false;
           errorMessage = "Token introuvable";
@@ -70,6 +85,7 @@ class _DirectChatThreadScreenState extends State<DirectChatThreadScreen> {
         return;
       }
 
+      // Crée ou récupère la conversation pour ce recruteur sur le serveur.
       final response = await http.post(
         Uri.parse('$baseUrl/messages/conversation'),
         headers: {
@@ -88,6 +104,7 @@ class _DirectChatThreadScreenState extends State<DirectChatThreadScreen> {
             data['conversation']?['id'] ?? data['conversationId'];
 
         if (conversationId == null) {
+          // Si l'ID de conversation n'est pas fourni par l'API, on affiche une erreur.
           setState(() {
             isLoading = false;
             errorMessage = "Conversation introuvable";
@@ -95,6 +112,7 @@ class _DirectChatThreadScreenState extends State<DirectChatThreadScreen> {
           return;
         }
 
+        // Si tout est bon, on charge les messages de la conversation.
         await fetchMessages();
       } else {
         setState(() {
@@ -111,6 +129,7 @@ class _DirectChatThreadScreenState extends State<DirectChatThreadScreen> {
     }
   }
 
+  // Récupère la liste des messages pour la conversation actuelle.
   Future<void> fetchMessages() async {
     if (conversationId == null) return;
 
@@ -119,6 +138,7 @@ class _DirectChatThreadScreenState extends State<DirectChatThreadScreen> {
       final token = prefs.getString('token');
       final myUserId = prefs.getString('user_id');
 
+      // Appel API pour récupérer les messages de la conversation donnée.
       final response = await http.get(
         Uri.parse('$baseUrl/messages/$conversationId'),
         headers: {
@@ -131,6 +151,7 @@ class _DirectChatThreadScreenState extends State<DirectChatThreadScreen> {
       if (response.statusCode == 200) {
         final List<dynamic> backendMessages = data['messages'] ?? [];
 
+        // Mappe chaque message en ajoutant un flag 'isMe' et un formatage d'heure.
         final mappedMessages = backendMessages.map((message) {
           final senderId = message['sender_id']?.toString();
           return {
@@ -160,6 +181,7 @@ class _DirectChatThreadScreenState extends State<DirectChatThreadScreen> {
     }
   }
 
+  // Formate l'heure d'envoi du message à partir du timestamp reçu.
   String formatMessageTime(dynamic createdAt) {
     if (createdAt == null) return "Now";
     final raw = createdAt.toString();
@@ -170,6 +192,7 @@ class _DirectChatThreadScreenState extends State<DirectChatThreadScreen> {
     return raw;
   }
 
+  // Envoie le message saisi dans la conversation en cours.
   Future<void> _sendMessage() async {
     final text = messageController.text.trim();
 
@@ -183,6 +206,7 @@ class _DirectChatThreadScreenState extends State<DirectChatThreadScreen> {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('token');
 
+      // Envoi de la requête pour poster un nouveau message.
       final response = await http.post(
         Uri.parse('$baseUrl/messages'),
         headers: {
@@ -200,6 +224,7 @@ class _DirectChatThreadScreenState extends State<DirectChatThreadScreen> {
       if (!mounted) return;
 
       if (response.statusCode == 201) {
+        // Si l'envoi est réussi, on efface le champ puis recharge les messages.
         messageController.clear();
         await fetchMessages();
       } else {
@@ -227,6 +252,8 @@ class _DirectChatThreadScreenState extends State<DirectChatThreadScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Construction de l'interface générale du chat avec en-tête,
+    // contenu et barre de saisie.
     return Scaffold(
       backgroundColor: backgroundBottom,
       resizeToAvoidBottomInset: true,
@@ -254,6 +281,8 @@ class _DirectChatThreadScreenState extends State<DirectChatThreadScreen> {
     );
   }
 
+  // Contenu principal de l'écran qui affiche l'état de chargement,
+  // les erreurs ou la liste des messages.
   Widget _buildBodyContent() {
     if (isLoading) {
       return const Center(
@@ -300,6 +329,7 @@ class _DirectChatThreadScreenState extends State<DirectChatThreadScreen> {
     );
   }
 
+  // En-tête du chat avec le bouton retour, le recruteur et le bouton appel.
   Widget _buildTopBar(BuildContext context, String company, String title) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(18, 14, 18, 10),
@@ -382,6 +412,7 @@ class _DirectChatThreadScreenState extends State<DirectChatThreadScreen> {
     );
   }
 
+  // Construction d'une bulle de message, alignée à droite si elle est envoyée par l'utilisateur.
   Widget _buildMessageBubble({
     required String text,
     required String time,
@@ -437,6 +468,7 @@ class _DirectChatThreadScreenState extends State<DirectChatThreadScreen> {
     );
   }
 
+  // Barre de saisie en bas de l'écran avec pièce jointe et bouton d'envoi.
   Widget _buildInputBar() {
     return Container(
       color: backgroundBottom,

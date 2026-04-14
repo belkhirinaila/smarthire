@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+// Écran d'accueil candidat.
+// Affiche la liste des offres, le profil de l'utilisateur, les notifications
+// et permet de filtrer / rechercher des opportunités.
 class CandidateHomeScreen extends StatefulWidget {
   const CandidateHomeScreen({super.key});
 
@@ -11,27 +14,36 @@ class CandidateHomeScreen extends StatefulWidget {
 }
 
 class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
+  // Couleurs principales utilisées dans l'UI.
   static const Color primaryBlue = Color(0xFF1E6CFF);
   static const Color backgroundTop = Color(0xFF08162D);
   static const Color backgroundBottom = Color(0xFF050A12);
   static const Color cardColor = Color(0xFF121C31);
   static const Color chipColor = Color(0xFF18233A);
 
+  // URL de base vers l'API backend.
   static const String baseUrl = 'http://192.168.100.47:5000/api';
 
+  // Données des offres et version filtrée pour l'affichage.
   List<dynamic> allJobs = [];
   List<dynamic> filteredJobs = [];
 
+  // États de chargement / erreur pour l'affichage.
   bool isLoading = true;
   String? errorMessage;
 
+  // Contrôleur et état pour la recherche et le filtre sélectionné.
   final TextEditingController searchController = TextEditingController();
   int selectedFilterIndex = 0;
   int unreadNotificationsCount = 0;
 
+  // Informations statiques et dynamiques de l'utilisateur.
   final String userName = "Candidate";
   final String userSubtitle = "Find your next role";
+  String dynamicUserName = "";
+  String? dynamicProfilePhoto;
 
+  // Liste des filtres de recherche / catégories affichées à l'écran.
   final List<String> filters = [
     "All Jobs",
     "Remote",
@@ -44,15 +56,22 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
   @override
   void initState() {
     super.initState();
+    // Au démarrage de l'écran, on charge les offres, le nombre de notifications,
+    // les informations utilisateur et la photo de profil.
     fetchJobs();
     fetchUnreadNotificationsCount();
+    fetchUserData();
+    fetchProfilePhoto();
   }
 
+  // Charge la liste des jobs depuis l'API et initialise l'état de l'écran.
   Future<void> fetchJobs() async {
     try {
-      final response = await http.get(
-        Uri.parse('$baseUrl/jobs'),
-      );
+      final response = await http
+    .get(Uri.parse('$baseUrl/jobs'))
+    .timeout(const Duration(seconds: 10));
+    debugPrint("STATUS: ${response.statusCode}");
+    debugPrint("BODY: ${response.body}");
 
       final data = jsonDecode(response.body);
 
@@ -77,6 +96,81 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
       });
     }
   }
+
+
+
+  // Récupère les données du candidat connecté, notamment son nom affiché.
+  Future<void> fetchUserData() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('token');
+  
+
+    if (token == null) return;
+
+    final res = await http.get(
+      Uri.parse('$baseUrl/auth/me'),
+      headers: {'Authorization': 'Bearer $token'},
+      
+    );
+
+    debugPrint(res.body);
+
+    if (res.statusCode == 200) {
+      final data = jsonDecode(res.body);
+
+      setState(() {
+        dynamicUserName =
+        data['user']['full_name'] ??
+       data['user']['name'] ??
+       data['user']['username'] ??
+      "";
+      });
+    }
+  } catch (e) {
+    debugPrint("error user: $e");
+  }
+
+}
+
+
+
+
+  // Charge la photo de profil du candidat pour l'afficher dans l'en-tête.
+  Future<void> fetchProfilePhoto() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('token');
+
+    if (token == null) return;
+
+    final res = await http.get(
+      Uri.parse('$baseUrl/candidate-profile/me'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+
+    debugPrint(res.body);
+
+    if (res.statusCode == 200) {
+      final data = jsonDecode(res.body);
+
+      setState(() {
+        final photo = data['profile']?['profile_photo'];
+
+      if (photo != null && photo.isNotEmpty) {
+      dynamicProfilePhoto =
+       "http://192.168.100.47:5000/" + photo;
+}
+      });
+    }
+  } catch (e) {
+    debugPrint("error photo: $e");
+  }
+   
+}
+
+
+
 
   Future<void> fetchUnreadNotificationsCount() async {
     try {
@@ -109,6 +203,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
     } catch (_) {}
   }
 
+  // Applique un filtre à la liste des jobs selon l'onglet sélectionné.
   void applyFilter(int index) {
     final selected = filters[index].toLowerCase();
 
@@ -158,6 +253,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
     });
   }
 
+  // Applique la recherche textuelle sur la liste de jobs déjà filtrée.
   void applySearch(String query) {
     final lowerQuery = query.toLowerCase().trim();
     final selected = filters[selectedFilterIndex].toLowerCase();
@@ -205,12 +301,14 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
     });
   }
 
+  // Nettoie les ressources à la fermeture de l'écran.
   @override
   void dispose() {
     searchController.dispose();
     super.dispose();
   }
 
+  // Affiche un message lorsque le bouton de filtres avancés est cliqué.
   void openFilters() {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
@@ -219,6 +317,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
     );
   }
 
+  // Ouvre l'écran des notifications et met à jour le badge au retour.
   Future<void> openNotifications() async {
     final result = await Navigator.pushNamed(context, '/notifications');
 
@@ -227,6 +326,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
     }
   }
 
+  // Ouvre l'écran de détail d'une offre en passant les informations nécessaires.
   void openJobDetails(Map<String, dynamic> job) {
     Navigator.pushNamed(
       context,
@@ -249,6 +349,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Construction du layout principal de l'écran candidat.
     return Scaffold(
       backgroundColor: backgroundBottom,
       body: Container(
@@ -295,6 +396,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
     );
   }
 
+  // Contenu principal des jobs : affichage du chargement, des erreurs ou des offres.
   Widget _buildJobsContent() {
     if (isLoading) {
       return const Center(
@@ -437,6 +539,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
     );
   }
 
+  // Étiquette utilisée pour afficher le type, le mode de travail ou la catégorie.
   Widget _buildTag(String text) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -455,6 +558,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
     );
   }
 
+  // En-tête de l'écran avec l'avatar, le nom de l'utilisateur et les notifications.
   Widget _buildHeader() {
     return Row(
       children: [
@@ -466,11 +570,20 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
             color: Colors.white.withOpacity(0.08),
             border: Border.all(color: Colors.white.withOpacity(0.08)),
           ),
-          child: const Icon(
-            Icons.person,
-            color: Colors.white,
-            size: 28,
-          ),
+          child: dynamicProfilePhoto != null && dynamicProfilePhoto!.isNotEmpty
+    ? ClipOval(
+        child: Image.network(
+          dynamicProfilePhoto!,
+          width: 52,
+          height: 52,
+          fit: BoxFit.cover,
+        ),
+      )
+    : const Icon(
+        Icons.person,
+        color: Colors.white,
+        size: 28,
+      ),
         ),
         const SizedBox(width: 12),
         Expanded(
@@ -479,7 +592,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
-                "Salut, $userName 👋",
+                "Salut, ${dynamicUserName.isNotEmpty ? dynamicUserName : userName} 👋",
                 style: TextStyle(
                   color: Colors.white.withOpacity(0.55),
                   fontSize: 14,
@@ -553,6 +666,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
     );
   }
 
+  // Ligne de recherche avec champ de texte et bouton de filtres.
   Widget _buildSearchRow() {
     return Row(
       children: [
@@ -612,6 +726,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
     );
   }
 
+  // Liste horizontale des filtres de job que l'utilisateur peut sélectionner.
   Widget _buildFilters() {
     return SizedBox(
       height: 42,
@@ -653,6 +768,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
     );
   }
 
+  // Titre de section avec un bouton 'See all' pour réinitialiser les filtres.
   Widget _buildSectionHeader({
     required String title,
     required VoidCallback onSeeAll,
@@ -683,6 +799,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
     );
   }
 
+  // Affiche un état vide lorsque aucune offre n'est disponible.
   Widget _buildEmptyState(String text) {
     return Container(
       width: double.infinity,

@@ -1,8 +1,14 @@
+// Import des packages utilisés ici :
+// - dart:convert pour décoder les réponses JSON du backend.
+// - flutter/material.dart pour l'UI et les widgets Flutter.
+// - http pour envoyer des requêtes réseau.
+// - shared_preferences pour récupérer le token et l'ID utilisateur stockés localement.
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+// Écran principal de gestion des messages et des demandes reçues.
 class MessagesScreen extends StatefulWidget {
   const MessagesScreen({super.key});
 
@@ -12,38 +18,48 @@ class MessagesScreen extends StatefulWidget {
 
 class _MessagesScreenState extends State<MessagesScreen>
     with SingleTickerProviderStateMixin {
+  // Définition des couleurs réutilisées dans l'interface.
   static const Color primaryBlue = Color(0xFF1E6CFF);
   static const Color backgroundTop = Color(0xFF08162D);
   static const Color backgroundBottom = Color(0xFF050A12);
   static const Color cardColor = Color(0xFF121C31);
 
+  // URL de base de l'API.
   static const String baseUrl = 'http://192.168.100.47:5000/api';
 
+  // Contrôleur de tabulation pour alterner entre les onglets Chats et Requests.
   late TabController _tabController;
 
+  // Listes des conversations et des demandes reçues.
   List<dynamic> chats = [];
   List<dynamic> requests = [];
 
+  // États de chargement pour chaque onglet.
   bool isLoadingChats = true;
   bool isLoadingRequests = true;
 
+  // Messages d'erreur spécifiques à chaque onglet.
   String? chatsError;
   String? requestsError;
 
   @override
   void initState() {
     super.initState();
+    // Initialise le TabController pour deux onglets.
     _tabController = TabController(length: 2, vsync: this);
+    // Charge les données des conversations et des demandes dès l'ouverture.
     fetchChats();
     fetchRequests();
   }
 
   @override
   void dispose() {
+    // Libère le contrôleur de tabulation lorsque le widget est détruit.
     _tabController.dispose();
     super.dispose();
   }
 
+  // Récupère les conversations de l'utilisateur connecté.
   Future<void> fetchChats() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -58,6 +74,7 @@ class _MessagesScreenState extends State<MessagesScreen>
         return;
       }
 
+      // Requête API pour récupérer les conversations de l'utilisateur.
       final response = await http.get(
         Uri.parse('$baseUrl/messages/conversations'),
         headers: {
@@ -70,6 +87,7 @@ class _MessagesScreenState extends State<MessagesScreen>
       if (response.statusCode == 200) {
         final List<dynamic> conversations = data['conversations'] ?? [];
 
+        // Transforme chaque conversation en objet plus facile à afficher.
         final mappedChats = conversations.map((chat) {
           final bool amCandidate =
               chat['candidate_id']?.toString() == myUserId?.toString();
@@ -111,6 +129,7 @@ class _MessagesScreenState extends State<MessagesScreen>
     }
   }
 
+  // Récupère les demandes d'accès reçues par le candidat.
   Future<void> fetchRequests() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -124,6 +143,7 @@ class _MessagesScreenState extends State<MessagesScreen>
         return;
       }
 
+      // Requête API pour obtenir les demandes reçues.
       final response = await http.get(
         Uri.parse('$baseUrl/requests/received'),
         headers: {
@@ -136,6 +156,7 @@ class _MessagesScreenState extends State<MessagesScreen>
       if (response.statusCode == 200) {
         final List<dynamic> backendRequests = data['requests'] ?? [];
 
+        // Transforme chaque demande pour l'affichage dans la liste.
         final mappedRequests = backendRequests.map((request) {
           final status = (request['status'] ?? 'pending').toString();
           return {
@@ -170,6 +191,8 @@ class _MessagesScreenState extends State<MessagesScreen>
     }
   }
 
+  // Retourne une couleur adaptée à l'état de la demande.
+  // Approuvé = vert, rejeté = rouge, en attente = orange.
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
       case 'approved':
@@ -182,6 +205,8 @@ class _MessagesScreenState extends State<MessagesScreen>
     }
   }
 
+  // Formate la date renvoyée par le backend pour affichage.
+  // On garde les 16 premiers caractères après avoir remplacé le 'T'.
   String _formatDate(dynamic createdAt) {
     if (createdAt == null) return "Recently";
     final raw = createdAt.toString().replaceFirst('T', ' ');
@@ -189,6 +214,8 @@ class _MessagesScreenState extends State<MessagesScreen>
     return raw;
   }
 
+  // Ouvre l'écran de chat direct en transmettant les informations nécessaires.
+  // Après retour, on recharge la liste des conversations.
   void openChat(Map<String, dynamic> chat) {
     Navigator.pushNamed(
       context,
@@ -203,6 +230,7 @@ class _MessagesScreenState extends State<MessagesScreen>
     });
   }
 
+  // Ouvre l'écran de décision de la demande et recharge les listes après retour.
   void openRequest(Map<String, dynamic> request) {
     Navigator.pushNamed(
       context,
@@ -216,6 +244,7 @@ class _MessagesScreenState extends State<MessagesScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Structure principale de l'écran : barre de titre, onglets et contenu.
     return Scaffold(
       backgroundColor: backgroundBottom,
       body: Container(
@@ -250,6 +279,7 @@ class _MessagesScreenState extends State<MessagesScreen>
     );
   }
 
+  // Barre de titre fixe de l'écran.
   Widget _buildTopBar() {
     return const Padding(
       padding: EdgeInsets.fromLTRB(18, 16, 18, 0),
@@ -270,6 +300,7 @@ class _MessagesScreenState extends State<MessagesScreen>
     );
   }
 
+  // Onglets pour naviguer entre listes de conversations et demandes.
   Widget _buildTabs() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 18),
@@ -297,6 +328,8 @@ class _MessagesScreenState extends State<MessagesScreen>
     );
   }
 
+  // Contenu de l'onglet Conversations.
+  // Affiche soit un loader, soit un message d'erreur, soit la liste des chats.
   Widget _buildChatsTab() {
     if (isLoadingChats) {
       return const Center(
@@ -422,6 +455,8 @@ class _MessagesScreenState extends State<MessagesScreen>
     );
   }
 
+  // Contenu de l'onglet Requests.
+  // Affiche les demandes d'accès reçues, ou les états de chargement / erreur.
   Widget _buildRequestsTab() {
     if (isLoadingRequests) {
       return const Center(
@@ -567,6 +602,7 @@ class _MessagesScreenState extends State<MessagesScreen>
     );
   }
 
+  // Badge d'état affichant le statut de la demande (APPROVED / REJECTED / PENDING).
   Widget _buildTypeBadge({
     required String text,
     required Color color,
@@ -589,6 +625,7 @@ class _MessagesScreenState extends State<MessagesScreen>
     );
   }
 
+  // État affiché lorsqu'il n'y a aucune conversation ou demande à afficher.
   Widget _buildEmptyState(String text) {
     return Padding(
       padding: const EdgeInsets.all(18),
@@ -623,6 +660,8 @@ class _MessagesScreenState extends State<MessagesScreen>
     );
   }
 
+  // État affiché lorsqu'une erreur survient durant le chargement d'un onglet.
+  // Propose un bouton de réessayage pour relancer la requête correspondante.
   Widget _buildErrorState(String text, {required VoidCallback onRetry}) {
     return Padding(
       padding: const EdgeInsets.all(18),

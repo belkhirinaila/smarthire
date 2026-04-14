@@ -1,7 +1,14 @@
+// Import des packages nécessaires :
+// - flutter/material.dart pour les widgets de l'interface utilisateur
+// - dart:convert pour encoder les données JSON envoyées au backend
+// - package:http pour effectuer les requêtes HTTP vers l'API
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
+// Ecran de demande de réinitialisation de mot de passe.
+// Il permet à l'utilisateur de saisir son adresse email et
+// d'envoyer un code de reset via le backend.
 class ResetPasswordScreen extends StatefulWidget {
   const ResetPasswordScreen({super.key});
 
@@ -13,17 +20,21 @@ class ResetPasswordScreen extends StatefulWidget {
 
 class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
 
+  // Contrôleur pour récupérer l'email saisi dans le champ de texte.
   final TextEditingController emailController = TextEditingController();
 
+  // Etat de chargement utilisé pour désactiver le bouton pendant l'appel API.
   bool isLoading = false;
 
   /// ==============================
   /// Envoyer email pour reset password
   /// ==============================
+  /// Cette méthode valide l'email, appelle l'API et redirige vers l'écran OTP.
   Future<void> sendResetCode() async {
 
     final email = emailController.text.trim();
 
+    // Validation côté client : vérifier que l'utilisateur a bien saisi un email.
     if (email.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Email requis")),
@@ -31,13 +42,15 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
       return;
     }
 
+    // Passage en état de chargement pour indiquer que la requête est en cours.
     setState(() {
       isLoading = true;
     });
 
     try {
+      // Envoi d'une requête POST au backend avec l'email de l'utilisateur.
       final response = await http.post(
-        Uri.parse("http://127.0.0.1:5000/api/auth/forgot-password"),
+        Uri.parse("http://192.168.100.47:5000/api/auth/register"),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
           "email": email,
@@ -50,7 +63,8 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
 
       if (response.statusCode == 200) {
 
-        /// Aller à écran OTP avec email
+        // Si le backend renvoie un succès, on navigue vers l'écran OTP.
+        // L'email est transmis en argument pour l'étape suivante.
         Navigator.pushReplacementNamed(
           context,
           '/reset-otp',
@@ -74,6 +88,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     } finally {
       if (!mounted) return;
 
+      // Retour à l'état initial une fois la requête terminée.
       setState(() {
         isLoading = false;
       });
@@ -82,6 +97,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Construction de l'interface utilisateur de l'écran de réinitialisation.
     return Scaffold(
       body: Container(
         width: double.infinity,
@@ -99,6 +115,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
 
+
                 const SizedBox(height: 10),
 
                 IconButton(
@@ -108,6 +125,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
 
                 const SizedBox(height: 25),
 
+                // Titre principal qui explique l'objectif de la page.
                 const Text(
                   "Reset Password",
                   style: TextStyle(
@@ -119,7 +137,8 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
 
                 const SizedBox(height: 30),
 
-                /// Email Input
+                /// Champ de saisie de l'email.
+                /// Le contenu est géré par emailController.
                 TextField(
                   controller: emailController,
                   style: const TextStyle(color: Colors.white),
@@ -136,7 +155,8 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
 
                 const SizedBox(height: 25),
 
-                /// Button
+                /// Bouton d'envoi du code de réinitialisation.
+                /// Il est désactivé pendant le chargement de la requête.
                 SizedBox(
                   width: double.infinity,
                   height: 56,
@@ -150,6 +170,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                         : const Text("Send Reset Code"),
                   ),
                 ),
+
 
               ],
             ),

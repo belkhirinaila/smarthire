@@ -4,6 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 
+// Ce fichier implémente l'écran de verification du code OTP envoyé par email.
+// L'utilisateur doit saisir les 4 chiffres reçus et peut demander un nouveau code
+// après un délai d'attente défini par un timer de renvoi.
+
 /// ==============================
 /// OTP SCREEN
 /// Cette page permet de :
@@ -23,42 +27,50 @@ class _OtpScreenState extends State<OtpScreen> {
   /// Couleur principale utilisée dans l'écran
   static const Color primaryBlue = Color(0xFF1E6CFF);
 
+  // Cet état représente le composant interne de l'écran OTP. Il stocke les valeurs
+  // des quatre cases du code, les focus nodes pour la navigation automatique,
+  // et les indicateurs de chargement pour les actions Verify et Resend.
+
   /// Controllers pour les 4 cases OTP
   final _c1 = TextEditingController();
   final _c2 = TextEditingController();
   final _c3 = TextEditingController();
   final _c4 = TextEditingController();
 
-  /// FocusNodes pour passer automatiquement d'une case à l'autre
+  /// FocusNodes pour passer automatiquement d'une case à l'autre.
+  /// Lorsqu'un chiffre est saisi, le focus passe à la case suivante.
   late final FocusNode _f1 = FocusNode();
   late final FocusNode _f2 = FocusNode();
   late final FocusNode _f3 = FocusNode();
   late final FocusNode _f4 = FocusNode();
 
-  /// Etat de chargement du bouton Verify
+  /// Etat de chargement du bouton Verify (vérification du code OTP en cours).
   bool isVerifying = false;
 
-  /// Etat de chargement du bouton Resend
+  /// Etat de chargement du bouton Resend (nouveau code OTP demandé).
   bool isResending = false;
 
-  /// Nombre de secondes restantes avant de pouvoir renvoyer le code
+  /// Nombre de secondes restantes avant de pouvoir renvoyer le code.
   int resendSeconds = 60;
 
-  /// Timer pour le countdown
+  /// Timer qui décrémente `resendSeconds` chaque seconde.
   Timer? _timer;
 
-  /// Récupérer les 4 chiffres OTP sous forme d'une seule chaîne
+  /// Concatène les valeurs des 4 controllers pour former le code OTP complet.
   String get code => "${_c1.text}${_c2.text}${_c3.text}${_c4.text}";
 
   @override
   void initState() {
     super.initState();
+    // Démarre immédiatement le timer de renvoi lorsque l'écran s'affiche.
     _startResendTimer();
   }
 
   /// ==============================
   /// Démarrer le countdown du bouton Resend
   /// ==============================
+  /// Cette fonction initialise le délai de renvoi à 60 secondes et met en place
+  /// un timer qui décrémente à chaque seconde tant que l'écran est visible.
   void _startResendTimer() {
     resendSeconds = 60;
 
@@ -79,16 +91,16 @@ class _OtpScreenState extends State<OtpScreen> {
 
   @override
   void dispose() {
-    /// Annuler le timer pour éviter les erreurs mémoire
+    /// Annuler le timer pour éviter les erreurs mémoire lorsque l'écran est démonté.
     _timer?.cancel();
 
-    /// Libérer les controllers
+    /// Libérer les controllers des champs OTP pour éviter les fuites de mémoire.
     _c1.dispose();
     _c2.dispose();
     _c3.dispose();
     _c4.dispose();
 
-    /// Libérer les focus nodes
+    /// Libérer les focus nodes associés aux champs OTP.
     _f1.dispose();
     _f2.dispose();
     _f3.dispose();
@@ -100,10 +112,13 @@ class _OtpScreenState extends State<OtpScreen> {
   /// ==============================
   /// Vérifier le code OTP
   /// ==============================
+  /// Cette fonction contrôle d'abord que l'utilisateur a rempli les 4 cases,
+  /// puis envoie le code au backend pour validation. En cas de succès, elle
+  /// redirige vers l'écran de confirmation.
   Future<void> _verify() async {
     final otp = code;
 
-    /// Vérifier si l'utilisateur a saisi les 4 chiffres
+    /// Vérifier si l'utilisateur a saisi les 4 chiffres.
     if (otp.length != 4) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Entrez le code OTP complet")),
@@ -116,9 +131,9 @@ class _OtpScreenState extends State<OtpScreen> {
     });
 
     try {
-      /// Envoyer le code OTP au backend pour vérification
+      /// Envoyer le code OTP au backend pour vérification.
       final response = await http.post(
-        Uri.parse("http://127.0.0.1:5000/api/auth/verify-otp"),
+        Uri.parse("http://192.168.100.47:5000/api/auth/verify-otp"),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
           "email": widget.email,
@@ -130,17 +145,17 @@ class _OtpScreenState extends State<OtpScreen> {
 
       if (!mounted) return;
 
-      /// Si le code est correct -> aller vers success
+      /// Si le code est correct -> aller vers success.
       if (response.statusCode == 200) {
         Navigator.pushReplacementNamed(context, '/success');
       } else {
-        /// Si le code est incorrect ou expiré
+        /// Si le code est incorrect ou expiré, afficher le message d'erreur.
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(data['message'] ?? "Code OTP incorrect")),
         );
       }
     } catch (e) {
-      /// Si le serveur ne répond pas
+      /// Si le serveur ne répond pas ou si une exception est levée.
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -158,8 +173,10 @@ class _OtpScreenState extends State<OtpScreen> {
   /// ==============================
   /// Renvoyer un nouveau code OTP
   /// ==============================
+  /// Cette fonction est déclenchée lorsque l'utilisateur demande un nouveau code
+  /// après expiration du délai. Elle appelle l'API de renvoi et remet le timer en route.
   Future<void> _resendOtp() async {
-    /// Bloquer le renvoi si le timer n'est pas encore terminé
+    /// Bloquer le renvoi si le timer n'est pas encore terminé.
     if (resendSeconds > 0) return;
 
     setState(() {
@@ -167,9 +184,9 @@ class _OtpScreenState extends State<OtpScreen> {
     });
 
     try {
-      /// Appel API pour renvoyer un nouveau code OTP
+      /// Appel API pour renvoyer un nouveau code OTP.
       final response = await http.post(
-        Uri.parse("http://127.0.0.1:5000/api/auth/resend-otp"),
+        Uri.parse("http://192.168.100.47:5000/api/auth/resend-otp"),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
           "email": widget.email,
@@ -185,7 +202,7 @@ class _OtpScreenState extends State<OtpScreen> {
           SnackBar(content: Text(data['message'] ?? 'Code OTP renvoyé')),
         );
 
-        /// Réinitialiser le timer après un renvoi réussi
+        /// Réinitialiser le timer après un renvoi réussi.
         _startResendTimer();
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -210,16 +227,18 @@ class _OtpScreenState extends State<OtpScreen> {
   /// ==============================
   /// Interface utilisateur
   /// ==============================
+  /// Construction de l'écran visuel, organisation des champs OTP, du timer,
+  /// du bouton de renvoi et du bouton de validation.
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      /// Permet à l'écran de s'adapter quand le clavier apparaît
+      /// Permet à l'écran de s'adapter quand le clavier apparaît.
       resizeToAvoidBottomInset: true,
 
       body: Container(
         width: double.infinity,
 
-        /// Fond en dégradé
+        /// Fond en dégradé.
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
@@ -229,7 +248,7 @@ class _OtpScreenState extends State<OtpScreen> {
         ),
 
         child: SafeArea(
-          /// Scroll pour éviter le overflow jaune avec le clavier
+          /// Scroll pour éviter le overflow jaune avec le clavier.
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 22),
             child: ConstrainedBox(
@@ -244,7 +263,7 @@ class _OtpScreenState extends State<OtpScreen> {
                   children: [
                     const SizedBox(height: 10),
 
-                    /// Bouton retour
+                    /// Bouton retour qui permet de revenir à l'écran précédent.
                     IconButton(
                       onPressed: () => Navigator.pop(context),
                       icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
@@ -252,7 +271,7 @@ class _OtpScreenState extends State<OtpScreen> {
 
                     const SizedBox(height: 6),
 
-                    /// Petit titre en haut
+                    /// Petit titre en haut indiquant le contexte de la page.
                     const Center(
                       child: Text(
                         "Verify Email",
@@ -305,7 +324,8 @@ class _OtpScreenState extends State<OtpScreen> {
 
                     const SizedBox(height: 40),
 
-                    /// Cases OTP
+                    /// Cases OTP pour saisir les 4 chiffres du code.
+                    /// Chaque case est un widget _OtpBox indépendant.
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -338,7 +358,8 @@ class _OtpScreenState extends State<OtpScreen> {
 
                     const SizedBox(height: 26),
 
-                    /// Partie Resend avec countdown
+                    /// Partie de renvoi du code OTP avec affichage du temps restant.
+                    /// Le bouton devient actif quand le timer arrive à zéro.
                     Center(
                       child: Column(
                         children: [
@@ -379,7 +400,8 @@ class _OtpScreenState extends State<OtpScreen> {
 
                     const Spacer(),
 
-                    /// Bouton principal Verify
+                    /// Bouton principal de vérification. Il est désactivé si la
+                    /// vérification est déjà en cours.
                     SizedBox(
                       width: double.infinity,
                       height: 56,
@@ -429,6 +451,9 @@ class _OtpScreenState extends State<OtpScreen> {
 /// OTP BOX
 /// Chaque case contient un seul chiffre
 /// ==============================
+/// Widget réutilisable pour une case individuelle du code OTP.
+/// Il gère le focus automatique d'une case à l'autre et déclenche la
+/// validation lorsqu'on arrive sur la dernière case.
 class _OtpBox extends StatelessWidget {
   static const Color primaryBlue = Color(0xFF1E6CFF);
 
@@ -480,7 +505,8 @@ class _OtpBox extends StatelessWidget {
           ),
         ),
         onChanged: (v) {
-          /// Si un chiffre est saisi -> aller à la case suivante
+          /// Si un chiffre est saisi -> aller à la case suivante.
+          /// Si l'utilisateur remplit la dernière case, déclencher la validation.
           if (v.isNotEmpty) {
             if (next != null) {
               FocusScope.of(context).requestFocus(next);
@@ -489,7 +515,7 @@ class _OtpBox extends StatelessWidget {
               onDone?.call();
             }
           }
-          /// Si la case devient vide -> revenir à la case précédente
+          /// Si la case est effacée -> revenir à la case précédente.
           else {
             if (prev != null) {
               FocusScope.of(context).requestFocus(prev);
