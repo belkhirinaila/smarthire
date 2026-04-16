@@ -98,7 +98,7 @@ class _LoginScreenState extends State<LoginScreen> {
         if (role == "candidate") {
           Navigator.pushReplacementNamed(context, '/candidate');
         } else if (role == "company" || role == "recruiter") {
-          Navigator.pushReplacementNamed(context, '/company');
+          Navigator.pushReplacementNamed(context, '/recruiter');
         } else if (role == "admin") {
           Navigator.pushReplacementNamed(context, '/admin');
         } else {

@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:fl_chart/fl_chart.dart';
+import 'package:socket_io_client/socket_io_client.dart' as IO;
 
 class RecruiterHome extends StatefulWidget {
   const RecruiterHome({super.key});
@@ -12,52 +14,123 @@ class RecruiterHome extends StatefulWidget {
 
 class _RecruiterHomeState extends State<RecruiterHome> {
 
+  static const String baseUrl = 'http://192.168.100.47:5000/api';
+
   static const Color primaryBlue = Color(0xFF1E6CFF);
   static const Color backgroundTop = Color(0xFF08162D);
   static const Color backgroundBottom = Color(0xFF050A12);
   static const Color cardColor = Color(0xFF121C31);
 
-  static const String baseUrl = "http://192.168.100.47:5000/api";
+  Map<String, dynamic>? stats;
+  List recentApplicants = [];
+  List chartData = [];
+
+  String companyName = "";
+  String companyLogo = "";
 
   bool isLoading = true;
 
-  Map stats = {};
-  List recentApplicants = [];
+  int unreadCount = 0;
+  late IO.Socket socket;
 
+  // ================= INIT =================
   @override
   void initState() {
     super.initState();
-    fetchDashboard();
+    loadDashboard();
+    fetchUnread();
+    initSocket();
   }
 
-  Future<void> fetchDashboard() async {
+  // ================= SOCKET =================
+  void initSocket() {
+    socket = IO.io(
+      "http://192.168.100.47:5000",
+      IO.OptionBuilder().setTransports(['websocket']).build(),
+    );
+
+    socket.connect();
+
+    socket.onConnect((_) async {
+      print("🟢 SOCKET CONNECTED");
+
+      final prefs = await SharedPreferences.getInstance();
+      int userId = prefs.getInt("userId") ?? 0;
+
+      socket.emit("joinUser", userId);
+      print("👤 Joined room: $userId");
+    });
+
+    // 🔥 realtime badge
+    socket.on("newNotification", (data) {
+      setState(() {
+        unreadCount++;
+      });
+    });
+  }
+
+  // ================= UNREAD =================
+  Future<void> fetchUnread() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString("token");
+
+    final res = await http.get(
+      Uri.parse("$baseUrl/notifications/unread-count"),
+      headers: {"Authorization": "Bearer $token"},
+    );
+
+    final data = jsonDecode(res.body);
+
+    setState(() {
+      unreadCount = data["count"];
+    });
+  }
+
+  // ================= DASHBOARD =================
+  Future<void> loadDashboard() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString("token");
+      final token = prefs.getString('token');
 
       final res = await http.get(
-        Uri.parse("$baseUrl/recruiter/dashboard"),
-        headers: {"Authorization": "Bearer $token"},
+        Uri.parse('$baseUrl/recruiter/dashboard'),
+        headers: {'Authorization': 'Bearer $token'},
       );
 
       final data = jsonDecode(res.body);
 
-      setState(() {
-        stats = data["stats"] ?? {};
-        recentApplicants = data["recent_applicants"] ?? [];
-        isLoading = false;
-      });
+      if (res.statusCode == 200) {
+        setState(() {
+          stats = data['stats'];
+          recentApplicants = data['recentApplicants'];
+          chartData = data['chartData'];
 
+          companyName = data['company']?['name'] ?? "";
+          companyLogo = data['company']?['logo'] ?? "";
+
+          isLoading = false;
+        });
+      } else {
+        setState(() => isLoading = false);
+      }
     } catch (e) {
       setState(() => isLoading = false);
     }
   }
 
+  // ================= BUILD =================
   @override
   Widget build(BuildContext context) {
+
+    if (isLoading) {
+      return const Scaffold(
+        backgroundColor: backgroundBottom,
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Scaffold(
       backgroundColor: backgroundBottom,
-
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
@@ -67,182 +140,256 @@ class _RecruiterHomeState extends State<RecruiterHome> {
           ),
         ),
         child: SafeArea(
-          child: isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : SingleChildScrollView(
-                  padding: const EdgeInsets.all(18),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+          child: RefreshIndicator(
+            onRefresh: () async {
+              await loadDashboard();
+              await fetchUnread();
+            },
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+
+                  // ================= TOP BAR =================
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
 
-                      _header(),
-
-                      const SizedBox(height: 20),
-
-                      const Text("OVERVIEW",
-                          style: TextStyle(color: Colors.white54)),
-
-                      const SizedBox(height: 12),
-
-                      _bigCard(),
-
-                      const SizedBox(height: 12),
-
-                      Row(
+                      // 🔔 NOTIFICATIONS + BADGE
+                      Stack(
                         children: [
-                          Expanded(child: _smallCard("Active Jobs", stats["total_jobs"], "Pending")),
-                          const SizedBox(width: 10),
-                          Expanded(child: _smallCard("Interviewing", stats["shortlisted"], "Today")),
+
+                          GestureDetector(
+                            onTap: () async {
+                              await Navigator.pushNamed(context, '/notifications');
+                              fetchUnread(); // 🔥 refresh after back
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: const BoxDecoration(
+                                color: cardColor,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.notifications_none, color: Colors.white),
+                            ),
+                          ),
+
+                          if (unreadCount > 0)
+                            Positioned(
+                              right: 2,
+                              top: 2,
+                              child: Container(
+                                padding: const EdgeInsets.all(5),
+                                decoration: const BoxDecoration(
+                                  color: Colors.red,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Text(
+                                  "$unreadCount",
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ),
                         ],
                       ),
 
-                      const SizedBox(height: 20),
+                      // 🏢 NAME
+                      Expanded(
+                        child: Text(
+                          companyName.isEmpty ? "My Company" : companyName,
+                          textAlign: TextAlign.center,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
 
-                      _searchCard(),
-
-                      const SizedBox(height: 20),
-
-                      _sectionHeader(),
-
-                      const SizedBox(height: 10),
-
-                      ...recentApplicants.map((e) => _applicantCard(e)).toList(),
+                      // 🏢 LOGO
+                      Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: companyLogo.isNotEmpty
+                              ? Image.network(
+                                  "http://192.168.100.47:5000/$companyLogo",
+                                  fit: BoxFit.cover,
+                                )
+                              : Container(
+                                  color: Colors.grey,
+                                  child: const Icon(Icons.business, color: Colors.white),
+                                ),
+                        ),
+                      ),
                     ],
                   ),
-                ),
+
+                  const SizedBox(height: 20),
+
+                  // ================= STATS =================
+                  Row(
+                    children: [
+                      Expanded(child: _stat("Applicants", stats?['totalApplicants'], Colors.orange)),
+                      const SizedBox(width: 10),
+                      Expanded(child: _stat("Jobs", stats?['activeJobs'], Colors.green)),
+                    ],
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  Row(
+                    children: [
+                      Expanded(child: _stat("Pending", stats?['pending'], Colors.red)),
+                      const SizedBox(width: 10),
+                      Expanded(child: _stat("Interview", stats?['interviewing'], primaryBlue)),
+                    ],
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  _chart(),
+
+                  const SizedBox(height: 20),
+
+                  const Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      "Recent Applicants",
+                      style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+
+                  const SizedBox(height: 10),
+
+                  _applicants(),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
-
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: primaryBlue,
-        onPressed: () {
-          Navigator.pushNamed(context, '/create-job');
-        },
-        child: const Icon(Icons.add),
-      ),
     );
   }
 
-  // ================= HEADER =================
-  Widget _header() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: const [
-        Text("SmartHire DZ",
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        Icon(Icons.notifications, color: Colors.white),
-      ],
-    );
-  }
-
-  // ================= BIG CARD =================
-  Widget _bigCard() {
+  // ================= STAT =================
+  Widget _stat(String title, dynamic val, Color color) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: cardColor,
         borderRadius: BorderRadius.circular(20),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text("Total Applicants",
-              style: TextStyle(color: Colors.white70)),
-          const SizedBox(height: 10),
-          Text(
-            "${stats["total_applications"] ?? 0}",
-            style: const TextStyle(
-                color: Colors.white,
-                fontSize: 28,
-                fontWeight: FontWeight.bold),
-          ),
+          Text(val?.toString() ?? "0",
+              style: TextStyle(color: color, fontSize: 22, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 5),
+          Text(title, style: const TextStyle(color: Colors.white70)),
         ],
       ),
     );
   }
 
-  // ================= SMALL CARD =================
-  Widget _smallCard(String title, dynamic value, String sub) {
+  // ================= CHART =================
+  Widget _chart() {
+    if (chartData.isEmpty) {
+      return Container(
+        height: 180,
+        decoration: BoxDecoration(
+          color: cardColor,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: const Center(
+          child: Text("No activity yet", style: TextStyle(color: Colors.white54)),
+        ),
+      );
+    }
+
+    List<FlSpot> applicants = [];
+    List<FlSpot> jobs = [];
+
+    for (int i = 0; i < chartData.length; i++) {
+      applicants.add(FlSpot(i.toDouble(), (chartData[i]['applicants'] ?? 0).toDouble()));
+      jobs.add(FlSpot(i.toDouble(), (chartData[i]['jobs'] ?? 0).toDouble()));
+    }
+
     return Container(
-      padding: const EdgeInsets.all(14),
+      height: 200,
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: cardColor,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
       ),
-      child: Column(
-        children: [
-          Text(title, style: const TextStyle(color: Colors.white70)),
-          const SizedBox(height: 6),
-          Text("${value ?? 0}",
-              style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold)),
-          const SizedBox(height: 4),
-          Text(sub, style: const TextStyle(color: Colors.orange)),
-        ],
-      ),
-    );
-  }
-
-  // ================= SEARCH =================
-  Widget _searchCard() {
-    return GestureDetector(
-      onTap: () {
-        Navigator.pushNamed(context, '/search-candidates');
-      },
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: primaryBlue.withOpacity(0.2),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: const Row(
-          children: [
-            Icon(Icons.search, color: Colors.white),
-            SizedBox(width: 10),
-            Text("Find Candidates",
-                style: TextStyle(color: Colors.white)),
+      child: LineChart(
+        LineChartData(
+          gridData: FlGridData(show: true),
+          borderData: FlBorderData(show: false),
+          lineBarsData: [
+            LineChartBarData(spots: applicants, isCurved: true, color: primaryBlue),
+            LineChartBarData(spots: jobs, isCurved: true, color: Colors.green),
           ],
         ),
       ),
     );
   }
 
-  // ================= HEADER =================
-  Widget _sectionHeader() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: const [
-        Text("Recent Applicants",
-            style: TextStyle(color: Colors.white)),
-        Text("View All", style: TextStyle(color: primaryBlue)),
-      ],
-    );
-  }
+  // ================= APPLICANTS =================
+  Widget _applicants() {
+    if (recentApplicants.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.all(20),
+        child: Text("No applicants yet", style: TextStyle(color: Colors.white54)),
+      );
+    }
 
-  // ================= CARD =================
-  Widget _applicantCard(dynamic app) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        children: [
-          const CircleAvatar(),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(app["full_name"] ?? "",
-                style: const TextStyle(color: Colors.white)),
+    return ListView.builder(
+      itemCount: recentApplicants.length,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemBuilder: (context, i) {
+        final item = recentApplicants[i];
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 10),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: cardColor,
+            borderRadius: BorderRadius.circular(16),
           ),
-          ElevatedButton(
-            onPressed: () {},
-            child: const Text("Shortlist"),
-          )
-        ],
-      ),
+          child: Row(
+            children: [
+              const CircleAvatar(
+                backgroundColor: Colors.grey,
+                child: Icon(Icons.person, color: Colors.white),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(item['full_name'], style: const TextStyle(color: Colors.white)),
+                    Text(item['status'], style: const TextStyle(color: Colors.white54)),
+                  ],
+                ),
+              ),
+              Text(
+                item['created_at'].toString().substring(0, 10),
+                style: const TextStyle(color: Colors.white38),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

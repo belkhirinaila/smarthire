@@ -49,6 +49,9 @@ import 'package:smarthire_app/features/recruiter/jobs/job_details_screen_for_rec
 import 'package:smarthire_app/features/recruiter/applications/applicants_screen.dart';
 import 'package:smarthire_app/features/recruiter/messages/chat_screen.dart';
 import 'package:smarthire_app/features/recruiter/applications/candidate_search_screen.dart';
+import 'package:smarthire_app/features/recruiter/jobs/job_success_screen.dart';
+import 'package:smarthire_app/features/recruiter/company/settings_screen.dart';
+import 'package:smarthire_app/features/recruiter/company/edit_company_screen.dart';
 /// ==============================
 /// ADMIN
 /// ==============================
@@ -126,7 +129,11 @@ class SmartHireApp extends StatelessWidget {
         /// RECRUITER 🔥
         /// ==============================
         '/recruiter': (context) => const RecruiterMainScreen(),
+        '/recruiter-jobs': (context) => const RecruiterJobsScreen(),
+        '/recruiter-messages': (context) => const RecruiterMessagesScreen(),
+        '/company-profile': (context) => const CompanyProfileScreen(),
         '/create-job': (context) => const CreateJobScreen(),
+        '/job-success': (context) => const JobSuccessScreen(),
         '/recruiter-job-details': (context) {
         final args = ModalRoute.of(context)!.settings.arguments as Map;
         return JobDetailsScreenForRecruiter(jobId: args['jobId']);
@@ -137,10 +144,12 @@ class SmartHireApp extends StatelessWidget {
        },
        '/chat': (context) {
          final args = ModalRoute.of(context)!.settings.arguments as Map;
-         return ChatScreen(conversationId: args['conversationId']);
+         return ChatScreen(conversationId: args['conversationId'], socket: args['socket']);
         },
-        '/create-job': (context) => const CreateJobScreen(),
+        
         '/search-candidates': (context) => const CandidateSearchScreen(),
+        '/settings': (context) => const SettingsScreen(),
+        '/edit-company': (context) => const EditCompanyProfileScreen(),
         /// ==============================
         /// ADMIN
         /// ==============================

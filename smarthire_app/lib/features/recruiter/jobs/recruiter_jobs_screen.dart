@@ -11,18 +11,48 @@ class RecruiterJobsScreen extends StatefulWidget {
       _RecruiterJobsScreenState();
 }
 
-class _RecruiterJobsScreenState extends State<RecruiterJobsScreen> {
+class _RecruiterJobsScreenState
+    extends State<RecruiterJobsScreen> {
 
   static const Color primaryBlue = Color(0xFF1E6CFF);
-  static const Color backgroundTop = Color(0xFF08162D);
-  static const Color backgroundBottom = Color(0xFF050A12);
+  static const Color background = Color(0xFF050A12);
   static const Color cardColor = Color(0xFF121C31);
 
-  static const String baseUrl = "http://192.168.100.47:5000/api";
-
   List jobs = [];
+  String selectedFilter = "all";
+
   bool isLoading = true;
-  String? error;
+
+  // ================= FETCH =================
+  Future<void> fetchJobs() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString("token");
+
+    final res = await http.get(
+      Uri.parse("http://192.168.100.47:5000/api/recruiter/jobs/my"),
+      headers: {"Authorization": "Bearer $token"},
+    );
+
+    final data = jsonDecode(res.body);
+
+    setState(() {
+      jobs = data["jobs"];
+      isLoading = false;
+    });
+  }
+
+  // ================= DELETE =================
+  Future<void> deleteJob(int id) async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString("token");
+
+    await http.delete(
+      Uri.parse("http://192.168.100.47:5000/api/recruiter/jobs/$id"),
+      headers: {"Authorization": "Bearer $token"},
+    );
+
+    fetchJobs(); // 🔥 refresh
+  }
 
   @override
   void initState() {
@@ -30,81 +60,111 @@ class _RecruiterJobsScreenState extends State<RecruiterJobsScreen> {
     fetchJobs();
   }
 
-  Future<void> fetchJobs() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString("token");
+  // ================= FILTER =================
+  List get filteredJobs {
+  if (selectedFilter == "all") return jobs;
 
-      final res = await http.get(
-        Uri.parse("$baseUrl/recruiter/jobs/my"),
-        headers: {"Authorization": "Bearer $token"},
-      );
-
-      final data = jsonDecode(res.body);
-
-      if (res.statusCode == 200) {
-        setState(() {
-          jobs = data["jobs"] ?? [];
-          isLoading = false;
-        });
-      } else {
-        setState(() {
-          error = data["message"];
-          isLoading = false;
-        });
-      }
-
-    } catch (e) {
-      setState(() {
-        error = "Error loading jobs";
-        isLoading = false;
-      });
+  return jobs.where((job) {
+    if (selectedFilter == "active") {
+      return job["status"] == "active";
+    } 
+    else if (selectedFilter == "draft") {
+      return job["status"] == "draft";
+    } 
+    else if (selectedFilter == "closed") {
+      return job["status"] == "closed";
     }
-  }
+    return true;
+  }).toList();
+}
 
+  // ================= UI =================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: backgroundBottom,
+      backgroundColor: background,
 
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [backgroundTop, backgroundBottom],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-          ),
-        ),
+      body: SafeArea(
+        child: Column(
+          children: [
 
-        child: SafeArea(
-          child: isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : error != null
-                  ? Center(
-                      child: Text(error!,
-                          style: const TextStyle(color: Colors.white)),
-                    )
-                  : SingleChildScrollView(
-                      padding: const EdgeInsets.all(18),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
+            // HEADER
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text(
+                "Jobs",
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
 
-                          const Text(
-                            "My Jobs",
-                            style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 22,
-                                fontWeight: FontWeight.bold),
-                          ),
+            // ================= FILTER =================
+            SizedBox(
+              height: 50,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                children: [
+                  _filterButton("all", "All Jobs"),
+                  _filterButton("active", "Active"),
+                  _filterButton("draft", "Draft"),
+                  _filterButton("closed", "Closed"),
+                ],
+              ),
+            ),
 
-                          const SizedBox(height: 20),
+            const SizedBox(height: 10),
 
-                          ...jobs.map((job) => _jobCard(job)).toList(),
+            // ================= LIST =================
+            Expanded(
+              child: isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: filteredJobs.length,
+                      itemBuilder: (c, i) {
+                        final job = filteredJobs[i];
 
-                        ],
-                      ),
+                        return _jobCard(job);
+                      },
                     ),
+            )
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ================= FILTER BUTTON =================
+  Widget _filterButton(String value, String label) {
+    final isSelected = selectedFilter == value;
+
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          selectedFilter = value;
+        });
+      },
+      child: Container(
+        margin: const EdgeInsets.only(right: 10),
+        padding:
+            const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+        decoration: BoxDecoration(
+          color: isSelected ? primaryBlue : cardColor,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Center(
+          child: Text(
+            label,
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight:
+                  isSelected ? FontWeight.bold : FontWeight.normal,
+            ),
+          ),
         ),
       ),
     );
@@ -112,37 +172,27 @@ class _RecruiterJobsScreenState extends State<RecruiterJobsScreen> {
 
   // ================= JOB CARD =================
   Widget _jobCard(dynamic job) {
-    final status = job["status"] ?? "active";
-
     return GestureDetector(
       onTap: () {
         Navigator.pushNamed(
           context,
-          '/recruiter-job-details',
+          "/job-details",
           arguments: {"jobId": job["id"]},
         );
       },
       child: Container(
-        margin: const EdgeInsets.only(bottom: 14),
-        padding: const EdgeInsets.all(14),
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: cardColor,
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: BorderRadius.circular(18),
         ),
         child: Row(
           children: [
 
-            Container(
-              width: 58,
-              height: 58,
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.06),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: const Icon(Icons.work, color: Colors.white54),
-            ),
+            const Icon(Icons.work, color: primaryBlue),
 
-            const SizedBox(width: 14),
+            const SizedBox(width: 10),
 
             Expanded(
               child: Column(
@@ -150,52 +200,60 @@ class _RecruiterJobsScreenState extends State<RecruiterJobsScreen> {
                 children: [
 
                   Text(
-                    job["title"] ?? "",
+                    job["title"],
                     style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold),
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
 
                   const SizedBox(height: 4),
 
                   Text(
                     job["location"] ?? "",
-                    style: TextStyle(
-                        color: Colors.white.withOpacity(0.5)),
+                    style: const TextStyle(color: Colors.white54),
                   ),
 
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 4),
 
                   Text(
-                    job["salary"]?.toString() ?? "",
-                    style: const TextStyle(
-                        color: primaryBlue,
-                        fontWeight: FontWeight.bold),
+                    job["created_at"]
+                        ?.toString()
+                        .substring(0, 10) ??
+                        "",
+                    style: const TextStyle(color: Colors.white38),
                   ),
                 ],
               ),
             ),
 
-            const SizedBox(width: 10),
+            // ACTIONS
+            Row(
+              children: [
 
-            Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: status == "active"
-                    ? Colors.green.withOpacity(0.2)
-                    : Colors.red.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                status,
-                style: TextStyle(
-                  color: status == "active"
-                      ? Colors.green
-                      : Colors.red,
+                GestureDetector(
+                  onTap: () {
+                    Navigator.pushNamed(
+                      context,
+                      "/edit-job",
+                      arguments: {"job": job},
+                    );
+                  },
+                  child: const Icon(Icons.edit,
+                      color: Colors.blue),
                 ),
-              ),
-            ),
+
+                const SizedBox(width: 12),
+
+                GestureDetector(
+                  onTap: () {
+                    deleteJob(job["id"]);
+                  },
+                  child: const Icon(Icons.delete,
+                      color: Colors.red),
+                ),
+              ],
+            )
           ],
         ),
       ),
