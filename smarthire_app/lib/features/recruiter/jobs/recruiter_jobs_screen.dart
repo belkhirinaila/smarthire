@@ -11,8 +11,7 @@ class RecruiterJobsScreen extends StatefulWidget {
       _RecruiterJobsScreenState();
 }
 
-class _RecruiterJobsScreenState
-    extends State<RecruiterJobsScreen> {
+class _RecruiterJobsScreenState extends State<RecruiterJobsScreen> {
 
   static const Color primaryBlue = Color(0xFF1E6CFF);
   static const Color background = Color(0xFF050A12);
@@ -20,7 +19,6 @@ class _RecruiterJobsScreenState
 
   List jobs = [];
   String selectedFilter = "all";
-
   bool isLoading = true;
 
   // ================= FETCH =================
@@ -41,6 +39,26 @@ class _RecruiterJobsScreenState
     });
   }
 
+  // ================= FILTER =================
+  List getFilteredJobs() {
+    if (selectedFilter == "active") {
+      return jobs.where((j) => j["status"] == "active").toList();
+    }
+    if (selectedFilter == "closed") {
+      return jobs.where((j) => j["status"] == "closed").toList();
+    }
+    if (selectedFilter == "draft") {
+      return jobs.where((j) => j["status"] == "draft").toList();
+    }
+    return jobs;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    fetchJobs();
+  }
+
   // ================= DELETE =================
   Future<void> deleteJob(int id) async {
     final prefs = await SharedPreferences.getInstance();
@@ -54,93 +72,59 @@ class _RecruiterJobsScreenState
     fetchJobs(); // 🔥 refresh
   }
 
-  @override
-  void initState() {
-    super.initState();
-    fetchJobs();
-  }
-
-  // ================= FILTER =================
-  List get filteredJobs {
-  if (selectedFilter == "all") return jobs;
-
-  return jobs.where((job) {
-    if (selectedFilter == "active") {
-      return job["status"] == "active";
-    } 
-    else if (selectedFilter == "draft") {
-      return job["status"] == "draft";
-    } 
-    else if (selectedFilter == "closed") {
-      return job["status"] == "closed";
-    }
-    return true;
-  }).toList();
-}
-
   // ================= UI =================
   @override
   Widget build(BuildContext context) {
+
+    final filtered = getFilteredJobs();
+
     return Scaffold(
       backgroundColor: background,
 
-      body: SafeArea(
-        child: Column(
-          children: [
+      appBar: AppBar(
+        backgroundColor: const Color.fromARGB(255, 7, 2, 29),
+        title: const Text("My Jobs", style: TextStyle(color: Colors.white),),
+      ),
 
-            // HEADER
-            const Padding(
-              padding: EdgeInsets.all(16),
-              child: Text(
-                "Jobs",
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
+      body: Column(
+        children: [
 
-            // ================= FILTER =================
-            SizedBox(
-              height: 50,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                children: [
-                  _filterButton("all", "All Jobs"),
-                  _filterButton("active", "Active"),
-                  _filterButton("draft", "Draft"),
-                  _filterButton("closed", "Closed"),
-                ],
-              ),
-            ),
+          const SizedBox(height: 10),
 
-            const SizedBox(height: 10),
+          // FILTER BUTTONS
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _filterBtn("all", "All"),
+              _filterBtn("active", "Active"),
+              _filterBtn("draft", "Draft"),
+              _filterBtn("closed", "Closed"),
+            ],
+          ),
 
-            // ================= LIST =================
-            Expanded(
-              child: isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : ListView.builder(
-                      padding: const EdgeInsets.all(16),
-                      itemCount: filteredJobs.length,
-                      itemBuilder: (c, i) {
-                        final job = filteredJobs[i];
+          const SizedBox(height: 10),
 
-                        return _jobCard(job);
-                      },
-                    ),
-            )
-          ],
-        ),
+          // LIST
+          Expanded(
+            child: isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : ListView.builder(
+                    padding: const EdgeInsets.all(12),
+                    itemCount: filtered.length,
+                    itemBuilder: (context, index) {
+                      final job = filtered[index];
+                      return _jobCard(job);
+                    },
+                  ),
+          ),
+        ],
       ),
     );
   }
 
   // ================= FILTER BUTTON =================
-  Widget _filterButton(String value, String label) {
-    final isSelected = selectedFilter == value;
+  Widget _filterBtn(String value, String text) {
+    final active = selectedFilter == value;
 
     return GestureDetector(
       onTap: () {
@@ -149,22 +133,14 @@ class _RecruiterJobsScreenState
         });
       },
       child: Container(
-        margin: const EdgeInsets.only(right: 10),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? primaryBlue : cardColor,
+          color: active ? primaryBlue : cardColor,
           borderRadius: BorderRadius.circular(20),
         ),
-        child: Center(
-          child: Text(
-            label,
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight:
-                  isSelected ? FontWeight.bold : FontWeight.normal,
-            ),
-          ),
+        child: Text(
+          text,
+          style: const TextStyle(color: Colors.white),
         ),
       ),
     );
@@ -172,91 +148,104 @@ class _RecruiterJobsScreenState
 
   // ================= JOB CARD =================
   Widget _jobCard(dynamic job) {
-    return GestureDetector(
-      onTap: () {
-        Navigator.pushNamed(
-          context,
-          "/job-details",
-          arguments: {"jobId": job["id"]},
-        );
-      },
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: cardColor,
-          borderRadius: BorderRadius.circular(18),
-        ),
-        child: Row(
-          children: [
+  return GestureDetector(
+    onTap: () async {
+      await Navigator.pushNamed(
+        context,
+        "/recruiter-job-details",
+        arguments: {"jobId": job["id"]},
+      );
 
-            const Icon(Icons.work, color: primaryBlue),
+      fetchJobs();
+    },
 
-            const SizedBox(width: 10),
+    child: Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
 
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-
-                  Text(
-                    job["title"],
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
+          // TITLE + ACTIONS
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  job["title"] ?? "",
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
                   ),
+                ),
+              ),
 
-                  const SizedBox(height: 4),
+              // EDIT
+              GestureDetector(
+                onTap: () async {
+                  await Navigator.pushNamed(
+                    context,
+                    "/edit-job",
+                    arguments: {"job": job},
+                  );
+                  fetchJobs();
+                },
+                child: const Icon(Icons.edit, color: Colors.blue),
+              ),
 
-                  Text(
-                    job["location"] ?? "",
-                    style: const TextStyle(color: Colors.white54),
-                  ),
+              const SizedBox(width: 10),
 
-                  const SizedBox(height: 4),
+              // DELETE
+              GestureDetector(
+                onTap: () {
+                  deleteJob(job["id"]);
+                },
+                child: const Icon(Icons.delete, color: Colors.red),
+              ),
+            ],
+          ),
 
-                  Text(
-                    job["created_at"]
-                        ?.toString()
-                        .substring(0, 10) ??
-                        "",
-                    style: const TextStyle(color: Colors.white38),
-                  ),
-                ],
+          const SizedBox(height: 6),
+
+          Text(
+            job["location"] ?? "",
+            style: const TextStyle(color: Colors.white54),
+          ),
+
+          const SizedBox(height: 6),
+
+          Text(
+            "${job["salary_min"] ?? 0} - ${job["salary_max"] ?? 0} DZD",
+            style: const TextStyle(color: primaryBlue),
+          ),
+
+          const SizedBox(height: 8),
+
+          // ✅ STATUS BADGE رجعناه
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: job["status"] == "active"
+                  ? Colors.green
+                  : job["status"] == "closed"
+                      ? Colors.red
+                      : Colors.orange,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              job["status"].toString().toUpperCase(),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
               ),
             ),
-
-            // ACTIONS
-            Row(
-              children: [
-
-                GestureDetector(
-                  onTap: () {
-                    Navigator.pushNamed(
-                      context,
-                      "/edit-job",
-                      arguments: {"job": job},
-                    );
-                  },
-                  child: const Icon(Icons.edit,
-                      color: Colors.blue),
-                ),
-
-                const SizedBox(width: 12),
-
-                GestureDetector(
-                  onTap: () {
-                    deleteJob(job["id"]);
-                  },
-                  child: const Icon(Icons.delete,
-                      color: Colors.red),
-                ),
-              ],
-            )
-          ],
-        ),
+          ),
+        ],
       ),
-    );
-  }
+    ),
+  );
+}
 }

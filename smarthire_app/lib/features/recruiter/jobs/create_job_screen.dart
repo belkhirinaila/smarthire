@@ -81,13 +81,11 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
     final data = jsonDecode(res.body);
     setState(() => isLoading = false);
 
-    if (res.statusCode == 201) {
-      Navigator.pushNamed(context, '/job-success');
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(data["message"] ?? "Error")),
-      );
-    }
+    if (status == "draft") {
+  Navigator.pop(context, true); // 🔥 يرجع مباشرة للـ jobs
+} else {
+  Navigator.pushNamed(context, '/job-success');
+}
   }
 
   // ================= UI =================

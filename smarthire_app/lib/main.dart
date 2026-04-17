@@ -52,6 +52,9 @@ import 'package:smarthire_app/features/recruiter/applications/candidate_search_s
 import 'package:smarthire_app/features/recruiter/jobs/job_success_screen.dart';
 import 'package:smarthire_app/features/recruiter/company/settings_screen.dart';
 import 'package:smarthire_app/features/recruiter/company/edit_company_screen.dart';
+import 'package:smarthire_app/features/recruiter/jobs/edit_job_screen.dart';
+import 'package:smarthire_app/features/recruiter/jobs/candidate_profile_for_recruiter.dart';
+
 /// ==============================
 /// ADMIN
 /// ==============================
@@ -135,9 +138,21 @@ class SmartHireApp extends StatelessWidget {
         '/create-job': (context) => const CreateJobScreen(),
         '/job-success': (context) => const JobSuccessScreen(),
         '/recruiter-job-details': (context) {
-        final args = ModalRoute.of(context)!.settings.arguments as Map;
-        return JobDetailsScreenForRecruiter(jobId: args['jobId']);
+          final args = ModalRoute.of(context)!.settings.arguments as Map;
+
+          return RecruiterJobDetailsScreenRecruiter(
+           jobId: args["jobId"], // 🔥 هذا هو المهم
+         );
         },
+        '/candidate-profile-recruiter': (context) =>
+    const CandidateProfileForRecruiterScreen(),
+         "/edit-job": (context) {
+  final args = ModalRoute.of(context)!.settings.arguments as Map;
+
+  return EditJobScreen(
+    job: args["job"],
+  );
+},
         '/recruiter-applicants': (context) {
          final args = ModalRoute.of(context)!.settings.arguments as Map;
          return ApplicantsScreen(jobId: args['jobId']);

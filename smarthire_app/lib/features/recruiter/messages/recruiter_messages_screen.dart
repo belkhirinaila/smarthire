@@ -86,7 +86,7 @@ class _RecruiterMessagesScreenState extends State<RecruiterMessagesScreen> {
 
       appBar: AppBar(
         backgroundColor: Colors.black,
-        title: const Text("Messages"),
+        title: const Text("Messages", style: TextStyle(color: Colors.white),),
       ),
 
       body: isLoading

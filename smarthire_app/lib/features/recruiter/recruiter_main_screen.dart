@@ -57,8 +57,12 @@ class _RecruiterMainScreenState extends State<RecruiterMainScreen> {
 
               // 🔥 CENTER + BUTTON
               GestureDetector(
-                onTap: () {
-                  Navigator.pushNamed(context, '/create-job');
+                onTap: () async {
+                 final result = await Navigator.pushNamed(context, '/create-job');
+
+                 if (result == true) {
+                   setState(() {}); // 🔥 refresh UI فقط
+                  }
                 },
                 child: Container(
                   padding: const EdgeInsets.all(14),
