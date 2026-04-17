@@ -95,15 +95,22 @@ class _MessagesScreenState extends State<MessagesScreen>
           final dynamic otherUserId =
               amCandidate ? chat['recruiter_id'] : chat['candidate_id'];
 
+          final String companyName = (chat['company_name']?.toString().trim().isNotEmpty == true)
+              ? chat['company_name'].toString()
+              : (chat['other_user_name']?.toString().trim().isNotEmpty == true)
+                  ? chat['other_user_name'].toString()
+                  : 'Company';
+
+          final int unreadCount = int.tryParse(chat['unread_count']?.toString() ?? '') ?? 0;
+
           return {
             ...chat,
-            'company': amCandidate
-                ? "Recruiter #${chat['recruiter_id']}"
-                : "Candidate #${chat['candidate_id']}",
+            'company': companyName,
             'title': "Direct Conversation",
             'lastMessage': "Open conversation",
             'time': _formatDate(chat['created_at']),
-            'isUnread': false,
+            'isUnread': unreadCount > 0,
+            'unread_count': unreadCount,
             'other_user_id': otherUserId,
             'recruiter_id': chat['recruiter_id'],
           };
@@ -216,12 +223,16 @@ class _MessagesScreenState extends State<MessagesScreen>
 
   // Ouvre l'écran de chat direct en transmettant les informations nécessaires.
   // Après retour, on recharge la liste des conversations.
-  void openChat(Map<String, dynamic> chat) {
+  void openChat(Map chat) {
+    final conversationId = chat['id'] ?? chat['conversation_id'];
+
+    debugPrint('Opening candidate chat - conversationId: $conversationId, chat: $chat');
+
     Navigator.pushNamed(
       context,
-      '/direct-chat',
+      '/chat_candidate',
       arguments: {
-        'recruiter_id': chat['recruiter_id'],
+        'conversationId': conversationId,
         'company': chat['company'],
         'title': chat['title'],
       },
@@ -364,16 +375,16 @@ class _MessagesScreenState extends State<MessagesScreen>
           padding: const EdgeInsets.only(bottom: 14),
           child: GestureDetector(
             onTap: () => openChat(chat),
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: cardColor,
-                borderRadius: BorderRadius.circular(22),
-                border: Border.all(color: Colors.white.withOpacity(0.04)),
-              ),
-              child: Row(
-                children: [
-                  Stack(
+            child: Stack(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: cardColor,
+                    borderRadius: BorderRadius.circular(22),
+                    border: Border.all(color: Colors.white.withOpacity(0.04)),
+                  ),
+                  child: Row(
                     children: [
                       Container(
                         width: 56,
@@ -387,67 +398,78 @@ class _MessagesScreenState extends State<MessagesScreen>
                           color: Colors.white54,
                         ),
                       ),
-                      if (chat["isUnread"] == true)
-                        Positioned(
-                          top: 0,
-                          right: 0,
-                          child: Container(
-                            width: 12,
-                            height: 12,
-                            decoration: const BoxDecoration(
-                              color: Colors.redAccent,
-                              shape: BoxShape.circle,
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              chat["company"] ?? "",
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                              ),
                             ),
-                          ),
+                            const SizedBox(height: 4),
+                            Text(
+                              chat["title"] ?? "",
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.55),
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              chat["lastMessage"] ?? "",
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.55),
+                                fontSize: 14,
+                                height: 1.5,
+                              ),
+                            ),
+                          ],
                         ),
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        chat["time"] ?? "",
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.42),
+                          fontSize: 12,
+                        ),
+                      ),
                     ],
                   ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          chat["company"] ?? "",
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                          ),
+                ),
+                if ((chat['unread_count'] as int? ?? 0) > 0)
+                  Positioned(
+                    top: 10,
+                    right: 10,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.redAccent,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: backgroundBottom, width: 2),
+                      ),
+                      child: Text(
+                        (chat['unread_count'] as int).toString(),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          chat["title"] ?? "",
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.55),
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          chat["lastMessage"] ?? "",
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.55),
-                            fontSize: 14,
-                            height: 1.5,
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  Text(
-                    chat["time"] ?? "",
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.42),
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
-              ),
+              ],
             ),
           ),
         );

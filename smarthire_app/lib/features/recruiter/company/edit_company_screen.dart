@@ -54,6 +54,7 @@ class _EditCompanyProfileScreenState extends State<EditCompanyProfileScreen> {
     if (data["company"] != null) {
       final c = data["company"];
 
+      hasCompany = true;
       nameController.text = c["name"] ?? "";
       websiteController.text = c["website"] ?? "";
       descriptionController.text = c["description"] ?? "";
@@ -62,13 +63,12 @@ class _EditCompanyProfileScreenState extends State<EditCompanyProfileScreen> {
 
       String loc = c["location"] ?? "Alger";
 
-// 🔥 fix case
-selectedWilaya = wilayas.contains(loc)
-    ? loc
-    : wilayas.firstWhere(
-        (w) => w.toLowerCase() == loc.toLowerCase(),
-        orElse: () => "Alger",
-      );
+      selectedWilaya = wilayas.contains(loc)
+          ? loc
+          : wilayas.firstWhere(
+              (w) => w.toLowerCase() == loc.toLowerCase(),
+              orElse: () => "Alger",
+            );
     }
   }
 
@@ -79,40 +79,37 @@ selectedWilaya = wilayas.contains(loc)
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString("token");
 
-    final body = jsonEncode({
-      "name": nameController.text,
-      "website": websiteController.text,
-      "description": descriptionController.text,
+    final bodyMap = {
+      "name": nameController.text.trim(),
+      "website": websiteController.text.trim(),
+      "description": descriptionController.text.trim(),
       "location": selectedWilaya,
       "industry": industry,
-      "company_size":
-          int.tryParse(companySizeController.text) ?? 0
-    });
+      "company_size": int.tryParse(companySizeController.text) ?? 0
+    };
 
-    final url =
-        "http://192.168.100.47:5000/api/recruiter/company-profile";
+    final body = jsonEncode(bodyMap);
+    final url = "http://192.168.100.47:5000/api/recruiter/company-profile";
 
-    final res = hasCompany
-        ? await http.put(
-            Uri.parse(url),
-            headers: {
-              "Authorization": "Bearer $token",
-              "Content-Type": "application/json"
-            },
-            body: body,
-          )
-        : await http.post(
-            Uri.parse(url),
-            headers: {
-              "Authorization": "Bearer $token",
-              "Content-Type": "application/json"
-            },
-            body: body,
-          );
+    debugPrint('PUT Company profile body: $bodyMap');
+
+    final res = await http.put(
+      Uri.parse(url),
+      headers: {
+        "Authorization": "Bearer $token",
+        "Content-Type": "application/json"
+      },
+      body: body,
+    );
+
+    debugPrint('PUT Company profile response: ${res.statusCode} ${res.body}');
 
     setState(() => isLoading = false);
 
     if (res.statusCode == 200 || res.statusCode == 201) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Company profile updated successfully")),
+      );
       Navigator.pop(context, true); // 🔥 refresh
     } else {
       final data = jsonDecode(res.body);

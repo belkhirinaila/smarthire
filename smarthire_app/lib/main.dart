@@ -37,6 +37,7 @@ import 'package:smarthire_app/features/candidate/requests/request_decision_scree
 import 'package:smarthire_app/features/candidate/direct_chat_thread_screen.dart';
 import 'package:smarthire_app/features/candidate/jobs/saved_jobs_screen.dart';
 import 'package:smarthire_app/features/candidate/notifications_screen.dart';import 'package:smarthire_app/features/recruiter/notification.dart';
+import 'package:smarthire_app/features/candidate/requests/candidate_chat_screen.dart';
 /// ==============================
 /// RECRUITER
 /// ==============================
@@ -129,6 +130,7 @@ class SmartHireApp extends StatelessWidget {
         '/request-decision': (context) => const RequestDecisionScreen(),
         '/direct-chat': (context) => const DirectChatThreadScreen(),
         '/notifications': (context) => const NotificationsScreen(),
+        '/chat_candidate': (context) => const CandidateChatScreen(),
 
         /// ==============================
         /// RECRUITER 🔥

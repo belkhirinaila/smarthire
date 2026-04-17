@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:share_plus/share_plus.dart';
 
 class CompanyProfileScreen extends StatefulWidget {
   const CompanyProfileScreen({super.key});
@@ -44,6 +45,33 @@ class _CompanyProfileScreenState extends State<CompanyProfileScreen> {
   void initState() {
     super.initState();
     fetchCompany();
+  }
+
+  Future<void> shareCompanyProfile() async {
+    final String companyName = company?['name']?.toString().trim().isNotEmpty == true
+        ? company!['name'].toString()
+        : 'Company';
+    final String description = company?['description']?.toString().trim().isNotEmpty == true
+        ? company!['description'].toString()
+        : 'No description available.';
+    final String website = company?['website']?.toString().trim().isNotEmpty == true
+        ? company!['website'].toString()
+        : 'https://smarthire.com';
+    final String companyId = company?['id']?.toString() ?? '0';
+    final String shareUrl = 'https://smarthire.com/company/$companyId';
+
+    final String shareText =
+        'Company: $companyName\n'
+        'Description: $description\n'
+        'Website: $website\n'
+        'Profile: $shareUrl';
+
+    debugPrint('Share button clicked: $shareText');
+
+    await Share.share(
+      shareText,
+      subject: 'Discover $companyName on SmartHire',
+    );
   }
 
   @override
@@ -138,13 +166,27 @@ class _CompanyProfileScreenState extends State<CompanyProfileScreen> {
                 physics: const NeverScrollableScrollPhysics(),
                 children: [
 
-                  _actionCard(Icons.edit, "Edit Profile", () {
-                    Navigator.pushNamed(context, "/edit-company");
+                  _actionCard(Icons.edit, "Edit Profile", () async {
+                    final result = await Navigator.pushNamed(context, "/edit-company");
+                    if (result == true) {
+                      fetchCompany();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text("Company profile refreshed"),
+                        ),
+                      );
+                    }
                   }),
 
-                  _actionCard(Icons.settings, "Settings", () {}),
+                  _actionCard(Icons.settings, "Settings", () {
 
-                  _actionCard(Icons.share, "Share Company", () {}),
+                    Navigator.pushNamed(context, "/settings");
+                  }),
+                  
+ 
+                  _actionCard(Icons.share, "Share Company", () {
+                    shareCompanyProfile();
+                  }),
 
                   _actionCard(Icons.work, "Jobs", () async {
   await Navigator.pushNamed(context, "/recruiter-jobs");
