@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:socket_io_client/socket_io_client.dart' as IO;
 
 class CandidateProfileForRecruiterScreen extends StatefulWidget {
   const CandidateProfileForRecruiterScreen({super.key});
@@ -19,8 +20,22 @@ class _CandidateProfileForRecruiterScreenState
   static const Color cardColor = Color(0xFF121C31);
 
   Map profile = {};
+  List skills = [];
+  List experiences = [];
+  List education = [];
+
   bool isLoading = true;
   int? userId;
+
+  late IO.Socket socket;
+
+  // ================= SOCKET =================
+  void initSocket() {
+    socket = IO.io("http://192.168.100.47:5000", <String, dynamic>{
+      "transports": ["websocket"],
+      "autoConnect": true,
+    });
+  }
 
   // ================= FETCH =================
   Future<void> fetchProfile() async {
@@ -28,17 +43,51 @@ class _CandidateProfileForRecruiterScreenState
     final token = prefs.getString("token");
 
     final res = await http.get(
-      Uri.parse("http://192.168.100.47:5000/api/recruiter/candidate/$userId"),
+      Uri.parse("http://192.168.100.47:5000/api/recruiter/jobs/candidate-full/$userId"),
       headers: {"Authorization": "Bearer $token"},
     );
 
     final data = jsonDecode(res.body);
 
     setState(() {
-      profile = data["profile"];
+      profile = data["profile"] ?? {};
+      skills = data["skills"] ?? [];
+      experiences = data["experiences"] ?? [];
+      education = data["education"] ?? [];
       isLoading = false;
     });
   }
+
+  // ================= OPEN CHAT (FIX 🔥) =================
+  Future<void> openChat() async {
+  final prefs = await SharedPreferences.getInstance();
+  final token = prefs.getString("token");
+
+  final res = await http.post(
+    Uri.parse("http://192.168.100.47:5000/api/messages/conversation"),
+    headers: {
+      "Authorization": "Bearer $token",
+      "Content-Type": "application/json"
+    },
+    body: jsonEncode({
+      "user_id": userId
+    }),
+  );
+
+  final data = jsonDecode(res.body);
+
+  int conversationId =
+      data["conversation"]?["id"] ?? data["conversationId"];
+
+  // 🔥 هنا pushNamed
+  Navigator.pushNamed(
+    context,
+    "/chat",
+    arguments: {
+      "conversationId": conversationId,
+    },
+  );
+}
 
   @override
   void didChangeDependencies() {
@@ -47,6 +96,7 @@ class _CandidateProfileForRecruiterScreenState
     final args = ModalRoute.of(context)!.settings.arguments as Map;
     userId = args["userId"];
 
+    initSocket();
     fetchProfile();
   }
 
@@ -79,17 +129,19 @@ class _CandidateProfileForRecruiterScreenState
 
                   const SizedBox(height: 20),
 
-                  // PROFILE HEADER
+                  // HEADER
                   Column(
                     children: [
 
                       CircleAvatar(
                         radius: 60,
-                        backgroundImage: profile["profile_image"] != null
+                        backgroundImage: (profile["profile_image"] != null &&
+                                profile["profile_image"].toString().isNotEmpty)
                             ? NetworkImage(
                                 "http://192.168.100.47:5000/uploads/${profile["profile_image"]}")
                             : null,
-                        child: profile["profile_image"] == null
+                        child: (profile["profile_image"] == null ||
+                                profile["profile_image"].toString().isEmpty)
                             ? const Icon(Icons.person, size: 50)
                             : null,
                       ),
@@ -118,7 +170,7 @@ class _CandidateProfileForRecruiterScreenState
 
                   const SizedBox(height: 20),
 
-                  // ================= PRIVATE =================
+                  // PRIVATE
                   if (profile["is_public"] != 1)
                     Container(
                       margin: const EdgeInsets.all(16),
@@ -145,7 +197,7 @@ class _CandidateProfileForRecruiterScreenState
                           const SizedBox(height: 10),
 
                           const Text(
-                            "This profile is private. Send a request to view full details.",
+                            "Send request to unlock full profile",
                             textAlign: TextAlign.center,
                             style: TextStyle(color: Colors.white54),
                           ),
@@ -153,62 +205,104 @@ class _CandidateProfileForRecruiterScreenState
                           const SizedBox(height: 20),
 
                           ElevatedButton(
-                            onPressed: () {
-                              // TODO request access
-                            },
-                            child: const Text("Request Full Access"),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: primaryBlue,
+                            ),
+                            onPressed: () {},
+                            child: const Text("Request Access"),
                           )
                         ],
                       ),
                     ),
 
-                  // ================= PUBLIC =================
+                  // PUBLIC
                   if (profile["is_public"] == 1) ...[
 
-                    const SizedBox(height: 20),
-
-                    // SKILLS
-                    const Text("Skills",
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold)),
+                    _card(Icons.phone, profile["phone"] ?? "No phone"),
 
                     const SizedBox(height: 10),
 
-                    Wrap(
-                      spacing: 6,
-                      children: (profile["skills"] != null)
-                          ? List.generate(
-                              (jsonDecode(profile["skills"]) as List).length,
-                              (i) => Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 10, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: primaryBlue.withOpacity(0.2),
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                child: Text(
-                                  jsonDecode(profile["skills"])[i],
-                                  style: const TextStyle(color: Colors.white),
-                                ),
-                              ),
-                            )
-                          : [],
-                    ),
+                    _sectionTitle("Skills"),
+                    ...skills.map((s) => _card(Icons.star, s["skill_name"])),
+
+                    const SizedBox(height: 10),
+
+                    _sectionTitle("Experience"),
+                    ...experiences.map((e) => _card(
+                          Icons.work,
+                          "${e["job_title"]} chez ${e["company"]}\n"
+                          "${e["start_date"] ?? ""} → ${e["end_date"] ?? "Present"}",
+                        )),
+
+                    const SizedBox(height: 10),
+
+                    _sectionTitle("Education"),
+                    ...education.map((ed) => _card(
+                          Icons.school,
+                          "${ed["degree"]} ${ed["field"]}\n${ed["school"]}",
+                        )),
 
                     const SizedBox(height: 20),
 
-                    // CV BUTTON
-                    ElevatedButton(
-                      onPressed: () {
-                        // TODO open CV
-                      },
-                      child: const Text("View CV"),
+                    // 🔥 SEND MESSAGE FIXED
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: primaryBlue,
+                          minimumSize: const Size(double.infinity, 50),
+                        ),
+                        onPressed: () {
+                          if (userId != null) {
+                            openChat(); // 🔥 الحل هنا
+                          }
+                        },
+                        child: const Text("Send Message"),
+                      ),
                     ),
                   ],
+
+                  const SizedBox(height: 30),
                 ],
               ),
             ),
+    );
+  }
+
+  // UI
+  Widget _sectionTitle(String text) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Text(text,
+            style: const TextStyle(
+                color: Colors.white, fontWeight: FontWeight.bold)),
+      ),
+    );
+  }
+
+  Widget _card(IconData icon, String value) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: Colors.white54),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:smarthire_app/route_observer.dart';
 
 /// ==============================
 /// SPLASH / ONBOARDING
@@ -35,8 +36,7 @@ import 'package:smarthire_app/features/candidate/profile/privacy_visibility_scre
 import 'package:smarthire_app/features/candidate/requests/request_decision_screen.dart';
 import 'package:smarthire_app/features/candidate/direct_chat_thread_screen.dart';
 import 'package:smarthire_app/features/candidate/jobs/saved_jobs_screen.dart';
-import 'package:smarthire_app/features/candidate/notifications_screen.dart';
-
+import 'package:smarthire_app/features/candidate/notifications_screen.dart';import 'package:smarthire_app/features/recruiter/notification.dart';
 /// ==============================
 /// RECRUITER
 /// ==============================
@@ -54,6 +54,7 @@ import 'package:smarthire_app/features/recruiter/company/settings_screen.dart';
 import 'package:smarthire_app/features/recruiter/company/edit_company_screen.dart';
 import 'package:smarthire_app/features/recruiter/jobs/edit_job_screen.dart';
 import 'package:smarthire_app/features/recruiter/jobs/candidate_profile_for_recruiter.dart';
+import 'package:smarthire_app/features/recruiter/search_candidate_screen.dart';    
 
 /// ==============================
 /// ADMIN
@@ -72,6 +73,7 @@ class SmartHireApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       initialRoute: '/',
+      navigatorObservers: [routeObserver],
 
       routes: {
         /// ==============================
@@ -144,9 +146,16 @@ class SmartHireApp extends StatelessWidget {
            jobId: args["jobId"], // 🔥 هذا هو المهم
          );
         },
-        '/candidate-profile-recruiter': (context) =>
-    const CandidateProfileForRecruiterScreen(),
-         "/edit-job": (context) {
+        '/candidate-profile-recruiter': (context) {
+         final args = ModalRoute.of(context)!.settings.arguments as Map;
+
+         return CandidateProfileForRecruiterScreen(
+           
+          );
+        },
+        '/recruiter-notifications': (context) =>
+            const RecruiterNotificationsScreen(),
+        "/edit-job": (context) {
   final args = ModalRoute.of(context)!.settings.arguments as Map;
 
   return EditJobScreen(
@@ -158,13 +167,14 @@ class SmartHireApp extends StatelessWidget {
          return ApplicantsScreen(jobId: args['jobId']);
        },
        '/chat': (context) {
-         final args = ModalRoute.of(context)!.settings.arguments as Map;
-         return ChatScreen(conversationId: args['conversationId'], socket: args['socket']);
+         
+         return const ChatScreen();
         },
         
-        '/search-candidates': (context) => const CandidateSearchScreen(),
+        
         '/settings': (context) => const SettingsScreen(),
         '/edit-company': (context) => const EditCompanyProfileScreen(),
+        '/search-candidates': (context) => const SearchCandidatesScreen(),
         /// ==============================
         /// ADMIN
         /// ==============================

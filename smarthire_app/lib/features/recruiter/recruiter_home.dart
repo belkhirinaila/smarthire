@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
+import 'package:smarthire_app/route_observer.dart';
 
 class RecruiterHome extends StatefulWidget {
   const RecruiterHome({super.key});
@@ -12,7 +13,7 @@ class RecruiterHome extends StatefulWidget {
   State<RecruiterHome> createState() => _RecruiterHomeState();
 }
 
-class _RecruiterHomeState extends State<RecruiterHome> {
+class _RecruiterHomeState extends State<RecruiterHome> with RouteAware {
 
   static const String baseUrl = 'http://192.168.100.47:5000/api';
 
@@ -42,6 +43,33 @@ class _RecruiterHomeState extends State<RecruiterHome> {
     initSocket();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    routeObserver.subscribe(this, ModalRoute.of(context)!);
+  }
+
+  @override
+  void dispose() {
+    routeObserver.unsubscribe(this);
+    socket.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didPopNext() {
+    loadDashboard();
+    fetchUnread();
+  }
+
+  Future<int> _getLoggedUserId() async {
+    final prefs = await SharedPreferences.getInstance();
+    final int? storedInt = prefs.getInt("userId");
+    if (storedInt != null) return storedInt;
+    final String? storedString = prefs.getString("user_id") ?? prefs.getString("userId");
+    return int.tryParse(storedString ?? '') ?? 0;
+  }
+
   // ================= SOCKET =================
   void initSocket() {
     socket = IO.io(
@@ -54,8 +82,7 @@ class _RecruiterHomeState extends State<RecruiterHome> {
     socket.onConnect((_) async {
       print("🟢 SOCKET CONNECTED");
 
-      final prefs = await SharedPreferences.getInstance();
-      int userId = prefs.getInt("userId") ?? 0;
+      final int userId = await _getLoggedUserId();
 
       socket.emit("joinUser", userId);
       print("👤 Joined room: $userId");
@@ -67,7 +94,15 @@ class _RecruiterHomeState extends State<RecruiterHome> {
         unreadCount++;
       });
     });
-  }
+    socket.on("newApplication", (data) {
+      print("🔔 New application event received: $data");
+      loadDashboard();
+    });
+
+    socket.on("newJob", (data) {
+      print("🔔 New job event received: $data");
+      loadDashboard();
+    });  }
 
   // ================= UNREAD =================
   Future<void> fetchUnread() async {
@@ -100,8 +135,15 @@ class _RecruiterHomeState extends State<RecruiterHome> {
       final data = jsonDecode(res.body);
 
       if (res.statusCode == 200) {
+        final rawStats = Map<String, dynamic>.from(data['stats'] ?? {});
+        final totalApplicants = rawStats['totalApplicants'] ?? 0;
+        final activeJobs = rawStats['activeJobs'] ?? 0;
+        rawStats['applicationsPerJob'] = activeJobs > 0
+            ? (totalApplicants / activeJobs).toStringAsFixed(1)
+            : "0.0";
+
         setState(() {
-          stats = data['stats'];
+          stats = rawStats;
           recentApplicants = data['recentApplicants'];
           chartData = data['chartData'];
 
@@ -161,7 +203,7 @@ class _RecruiterHomeState extends State<RecruiterHome> {
 
                           GestureDetector(
                             onTap: () async {
-                              await Navigator.pushNamed(context, '/notifications');
+                              await Navigator.pushNamed(context, '/recruiter-notifications');
                               fetchUnread(); // 🔥 refresh after back
                             },
                             child: Container(
@@ -242,6 +284,8 @@ class _RecruiterHomeState extends State<RecruiterHome> {
                       Expanded(child: _stat("Applicants", stats?['totalApplicants'], Colors.orange)),
                       const SizedBox(width: 10),
                       Expanded(child: _stat("Jobs", stats?['activeJobs'], Colors.green)),
+                      const SizedBox(width: 10),
+                      Expanded(child: _stat("Apps / Job", stats?['applicationsPerJob'], Colors.blueAccent)),
                     ],
                   ),
 
@@ -324,7 +368,7 @@ class _RecruiterHomeState extends State<RecruiterHome> {
     }
 
     return Container(
-      height: 200,
+      height: 220,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: cardColor,
@@ -332,11 +376,47 @@ class _RecruiterHomeState extends State<RecruiterHome> {
       ),
       child: LineChart(
         LineChartData(
-          gridData: FlGridData(show: true),
+          lineTouchData: LineTouchData(enabled: false),
+          gridData: FlGridData(show: true, drawVerticalLine: false),
           borderData: FlBorderData(show: false),
+          titlesData: FlTitlesData(
+            leftTitles: AxisTitles(
+              sideTitles: SideTitles(showTitles: true, reservedSize: 30),
+            ),
+            bottomTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                interval: 1,
+                getTitlesWidget: (value, meta) {
+                  final index = value.toInt();
+                  if (index < 0 || index >= chartData.length) return const SizedBox();
+                  final label = chartData[index]['date']?.toString() ?? '';
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 6.0),
+                    child: Text(
+                      label.length >= 5 ? label.substring(label.length - 5) : label,
+                      style: const TextStyle(color: Colors.white54, fontSize: 10),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
           lineBarsData: [
-            LineChartBarData(spots: applicants, isCurved: true, color: primaryBlue),
-            LineChartBarData(spots: jobs, isCurved: true, color: Colors.green),
+            LineChartBarData(
+              spots: applicants,
+              isCurved: true,
+              color: primaryBlue,
+              barWidth: 3,
+              dotData: FlDotData(show: false),
+            ),
+            LineChartBarData(
+              spots: jobs,
+              isCurved: true,
+              color: Colors.green,
+              barWidth: 3,
+              dotData: FlDotData(show: false),
+            ),
           ],
         ),
       ),

@@ -339,7 +339,7 @@ class _RecruiterJobDetailsScreenRecruiterState
                                                   children: [
 
                                                     Text(
-                                                      c["name"] ?? "",
+                                                      c["full_name"] ?? "",
                                                       style:
                                                           const TextStyle(
                                                               color:

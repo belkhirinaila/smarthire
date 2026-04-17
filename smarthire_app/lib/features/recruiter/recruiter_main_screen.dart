@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'recruiter_home.dart';
-import 'jobs/recruiter_jobs_screen.dart';
+import 'search_candidate_screen.dart';
 import 'messages/recruiter_messages_screen.dart';
 import 'company/company_profile_screen.dart';
 
@@ -21,7 +21,7 @@ class _RecruiterMainScreenState extends State<RecruiterMainScreen> {
 
   final List<Widget> screens = const [
     RecruiterHome(),
-    RecruiterJobsScreen(),
+    SearchCandidatesScreen(),
     RecruiterMessagesScreen(),
     CompanyProfileScreen(),
   ];
@@ -53,7 +53,7 @@ class _RecruiterMainScreenState extends State<RecruiterMainScreen> {
             children: [
 
               _buildNavItem(0, Icons.dashboard, "Dashboard"),
-              _buildNavItem(1, Icons.work_outline, "Jobs"),
+              _buildNavItem(1, Icons.search, "Search"),
 
               // 🔥 CENTER + BUTTON
               GestureDetector(

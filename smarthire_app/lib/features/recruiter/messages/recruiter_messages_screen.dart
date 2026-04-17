@@ -57,7 +57,9 @@ class _RecruiterMessagesScreenState extends State<RecruiterMessagesScreen> {
 
       // 🔥 IMPORTANT: join user room
       final prefs = await SharedPreferences.getInstance();
-      int userId = prefs.getInt("userId") ?? 0;
+      final int? storedInt = prefs.getInt("userId");
+      final String? storedString = prefs.getString("user_id") ?? prefs.getString("userId");
+      final int userId = storedInt ?? int.tryParse(storedString ?? '') ?? 0;
 
       socket.emit("joinUser", userId);
 
@@ -95,6 +97,9 @@ class _RecruiterMessagesScreenState extends State<RecruiterMessagesScreen> {
               itemCount: conversations.length,
               itemBuilder: (c, i) {
                 final conv = conversations[i];
+                final otherName = (conv["other_user_name"]?.toString().trim().isNotEmpty == true)
+                    ? conv["other_user_name"].toString()
+                    : "User";
 
                 return GestureDetector(
                   onTap: () {
@@ -134,7 +139,7 @@ class _RecruiterMessagesScreenState extends State<RecruiterMessagesScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                "Candidate ${conv["candidate_id"]}",
+                                otherName,
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.bold,

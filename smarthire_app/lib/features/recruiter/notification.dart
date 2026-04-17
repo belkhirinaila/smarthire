@@ -28,6 +28,14 @@ class _RecruiterNotificationsScreenState
   late IO.Socket socket;
 
   // ================= SOCKET =================
+  Future<int> _getLoggedUserId() async {
+    final prefs = await SharedPreferences.getInstance();
+    final int? storedInt = prefs.getInt("userId");
+    if (storedInt != null) return storedInt;
+    final String? storedString = prefs.getString("user_id") ?? prefs.getString("userId");
+    return int.tryParse(storedString ?? '') ?? 0;
+  }
+
   void initSocket() {
     socket = IO.io(
       "http://192.168.100.47:5000",
@@ -40,18 +48,14 @@ class _RecruiterNotificationsScreenState
     socket.connect();
 
     socket.onConnect((_) async {
-  debugPrint("🟢 NOTIFICATION SOCKET CONNECTED");
+      debugPrint("🟢 NOTIFICATION SOCKET CONNECTED");
 
-  // 🔥 IMPORTANT
-  final prefs = await SharedPreferences.getInstance();
-  int userId = prefs.getInt("userId") ?? 0;
+      final int userId = await _getLoggedUserId();
 
-  socket.emit("joinUser", userId);
+      socket.emit("joinUser", userId);
 
-  debugPrint("👤 Joined notification room: $userId");
-});
-
-
+      debugPrint("👤 Joined notification room: $userId");
+    });
 
     // 🔥 realtime notification
     socket.on("newNotification", (data) {
@@ -88,28 +92,34 @@ class _RecruiterNotificationsScreenState
 
 
   void handleNotificationTap(dynamic item) {
-  String type = item["type"];
-  int id = item["related_id"] ?? 0;
+    final String type = item["type"]?.toString() ?? "";
+    final int id = int.tryParse(item["related_id"]?.toString() ?? '') ?? 0;
 
-  if (type == "message") {
-    Navigator.pushNamed(
-      context,
-      '/chat',
-      arguments: {
-        "conversationId": id,
-        "socket": socket,
-      },
-    );
-  } else if (type == "request") {
-    Navigator.pushNamed(context, '/requests');
-  } else if (type == "job") {
-    Navigator.pushNamed(
-      context,
-      '/job-details',
-      arguments: {"jobId": id},
-    );
+    if (type == "message") {
+      Navigator.pushNamed(
+        context,
+        '/chat',
+        arguments: {
+          "conversationId": id,
+          "socket": socket,
+        },
+      );
+    } else if (type == "request") {
+      Navigator.pushNamed(context, '/requests');
+    } else if (type == "job") {
+      Navigator.pushNamed(
+        context,
+        '/job-details',
+        arguments: {"jobId": id},
+      );
+    } else if (type == "application" && id > 0) {
+      Navigator.pushNamed(
+        context,
+        '/candidate-profile-recruiter',
+        arguments: {"userId": id},
+      );
+    }
   }
-}
 
   // ================= INIT =================
   @override
@@ -234,7 +244,9 @@ Future<void> markAllRead() async {
                 ? Icons.chat
                 : item["type"] == "request"
                     ? Icons.person_add
-                    : Icons.work,
+                    : item["type"] == "application"
+                        ? Icons.person_outline
+                        : Icons.work,
             color: primaryBlue,
           ),
         ),
