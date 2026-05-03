@@ -36,6 +36,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final TextEditingController behanceController = TextEditingController();
   final TextEditingController websiteController = TextEditingController();
   final TextEditingController photoController = TextEditingController();
+  final TextEditingController phoneController = TextEditingController();
+  final TextEditingController emailController = TextEditingController();
 
   // États locaux pour indiquer le chargement, l'enregistrement et l'existence du profil.
   bool isLoading = true;
@@ -60,6 +62,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     behanceController.dispose();
     websiteController.dispose();
     photoController.dispose();
+    phoneController.dispose();
+    emailController.dispose();
     super.dispose();
   }
 
@@ -103,6 +107,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           websiteController.text =
               (profile['personal_website'] ?? '').toString();
           photoController.text = (profile['profile_photo'] ?? '').toString();
+          phoneController.text = (profile['phone'] ?? '').toString();
+          emailController.text = (profile['email'] ?? '').toString();
         } else {
           profileExists = false;
         }
@@ -131,7 +137,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   Future<void> saveProfile() async {
     if (headlineController.text.trim().isEmpty ||
         locationController.text.trim().isEmpty ||
-        bioController.text.trim().isEmpty) {
+        bioController.text.trim().isEmpty ||
+        phoneController.text.trim().isEmpty ||
+        emailController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text("Headline, location et bio sont obligatoires"),
@@ -168,6 +176,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         'behance_link': behanceController.text.trim(),
         'personal_website': websiteController.text.trim(),
         'profile_photo': photoController.text.trim(),
+        'phone_number': phoneController.text.trim(),
+        'email': emailController.text.trim(),
       };
 
       late http.Response response;
@@ -347,10 +357,21 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       ),
                       const SizedBox(height: 16),
                       _buildInputCard(
-                        label: "Profile Photo URL",
-                        controller: photoController,
-                        hint: "https://...",
+                        label: "Phone Number *",
+                        controller: phoneController,
+                        hint: "+213 123 4567",
                       ),
+
+                      
+                      const SizedBox(height: 16),
+                      _buildInputCard(
+                        label: "Email *",
+                        controller: emailController,
+                        hint: "youremail@example.com",
+                        
+                      ),
+
+                      
                       const SizedBox(height: 30),
                     ],
                   ),

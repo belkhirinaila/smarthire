@@ -36,7 +36,8 @@ import 'package:smarthire_app/features/candidate/profile/privacy_visibility_scre
 import 'package:smarthire_app/features/candidate/requests/request_decision_screen.dart';
 import 'package:smarthire_app/features/candidate/direct_chat_thread_screen.dart';
 import 'package:smarthire_app/features/candidate/jobs/saved_jobs_screen.dart';
-import 'package:smarthire_app/features/candidate/notifications_screen.dart';import 'package:smarthire_app/features/recruiter/notification.dart';
+import 'package:smarthire_app/features/candidate/notifications_screen.dart';
+import 'package:smarthire_app/features/recruiter/notification.dart';
 import 'package:smarthire_app/features/candidate/requests/candidate_chat_screen.dart';
 /// ==============================
 /// RECRUITER
@@ -60,7 +61,7 @@ import 'package:smarthire_app/features/recruiter/search_candidate_screen.dart';
 /// ==============================
 /// ADMIN
 /// ==============================
-import 'package:smarthire_app/features/admin/admin_home_screen.dart';
+import 'package:smarthire_app/features/admin/admin_stats_screen.dart';
 
 void main() {
   runApp(const SmartHireApp());
@@ -180,7 +181,7 @@ class SmartHireApp extends StatelessWidget {
         /// ==============================
         /// ADMIN
         /// ==============================
-        '/admin': (context) => const AdminHomeScreen(),
+        '/admin': (context) => const AdminStatsScreen(),
       },
     );
   }

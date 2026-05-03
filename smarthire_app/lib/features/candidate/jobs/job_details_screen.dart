@@ -255,10 +255,10 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
     final String salary = job?['salary']?.toString() ?? "Salary";
     final String type = job?['type']?.toString() ?? "FULL-TIME";
     final String description =
-        job?['description'] ?? "No description available for this job yet.";
+     job?['description'] ?? "No description available for this job yet.";
 
     final List<dynamic> requirements =
-        job?['requirements'] is List ? job!['requirements'] : [];
+    job?['requirements'] is List ? job!['requirements'] : [];
 
     return Scaffold(
       backgroundColor: backgroundBottom,

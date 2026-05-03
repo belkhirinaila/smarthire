@@ -17,6 +17,45 @@ router.post("/", protect, authorize("candidate"), async (req, res) => {
       [job_id, candidate_id]
     );
 
+    const [jobRows] = await db.query(
+      `SELECT j.recruiter_id, j.title AS job_title, u.full_name AS candidate_name
+       FROM jobs j
+       JOIN users u ON u.id = ?
+       WHERE j.id = ?`,
+      [candidate_id, job_id]
+    );
+
+    if (jobRows.length > 0) {
+      const recruiterId = jobRows[0].recruiter_id;
+      const jobTitle = jobRows[0].job_title || "this job";
+      const candidateName = jobRows[0].candidate_name || "A candidate";
+      const message = `${candidateName} applied to ${jobTitle}.`;
+
+      await db.query(
+        `INSERT INTO notifications (user_id, title, message, type, related_id)
+         VALUES (?, ?, ?, ?, ?)`,
+        [
+          recruiterId,
+          "New application",
+          message,
+          "application",
+          candidate_id,
+        ]
+      );
+
+      const io = req.app.get("io");
+      if (io) {
+        io.to(`user_${recruiterId}`).emit("newNotification", {
+          user_id: recruiterId,
+          title: "New application",
+          message,
+          type: "application",
+          related_id: candidate_id,
+          is_read: 0,
+        });
+      }
+    }
+
     res.status(201).json({
       message: "Application submitted successfully",
       application_id: result.insertId

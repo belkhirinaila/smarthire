@@ -31,7 +31,10 @@ router.post("/", protect, authorize("candidate"), async (req, res) => {
       github_link,
       behance_link,
       personal_website,
-      profile_photo
+      profile_photo,
+      phone_number,
+      email
+
     } = req.body;
 
     const [existing] = await db.query(
@@ -45,7 +48,7 @@ router.post("/", protect, authorize("candidate"), async (req, res) => {
 
     const [result] = await db.query(
       `INSERT INTO candidate_profiles 
-      (user_id, professional_headline, location, bio, github_link, behance_link, personal_website, profile_photo)
+      (user_id, professional_headline, location, bio, github_link, behance_link, personal_website, profile_photo, phone_number, email)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         req.user.id,
@@ -55,7 +58,9 @@ router.post("/", protect, authorize("candidate"), async (req, res) => {
         github_link,
         behance_link,
         personal_website,
-        profile_photo
+        profile_photo,
+        phone_number,
+        email
       ]
     );
 
@@ -78,7 +83,10 @@ router.put("/", protect, authorize("candidate"), async (req, res) => {
       github_link,
       behance_link,
       personal_website,
-      profile_photo
+      profile_photo,
+      phone_number,
+      email
+
     } = req.body;
 
     const [existing] = await db.query(
@@ -92,7 +100,7 @@ router.put("/", protect, authorize("candidate"), async (req, res) => {
 
     await db.query(
       `UPDATE candidate_profiles
-       SET professional_headline = ?, location = ?, bio = ?, github_link = ?, behance_link = ?, personal_website = ?, profile_photo = ?
+       SET professional_headline = ?, location = ?, bio = ?, github_link = ?, behance_link = ?, personal_website = ?, profile_photo = ?, phone_number = ?, email = ?
        WHERE user_id = ?`,
       [
         professional_headline,
@@ -102,6 +110,8 @@ router.put("/", protect, authorize("candidate"), async (req, res) => {
         behance_link,
         personal_website,
         profile_photo,
+        phone_number,
+        email,
         req.user.id
       ]
     );

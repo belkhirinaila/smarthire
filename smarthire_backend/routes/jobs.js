@@ -14,13 +14,19 @@ router.post("/", protect, authorize("recruiter"), async (req, res) => {
       company_name,
       type,
       work_mode,
-      category
+      category,
+      requirements,
+      experience,
+      education,
+      languages,
+      skills,
+      team
     } = req.body;
 
     const [result] = await db.query(
       `INSERT INTO jobs 
-      (title, description, location, salary, company_name, recruiter_id, type, work_mode, category) 
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      (title, description, location, salary, company_name, recruiter_id, type, work_mode, category, requirements, experience, education, languages, skills, team) 
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         title,
         description,
@@ -30,7 +36,14 @@ router.post("/", protect, authorize("recruiter"), async (req, res) => {
         req.user.id,
         type,
         work_mode,
-        category
+        category,
+        requirements,
+        experience,
+        education,
+        languages,
+        skills,
+        team
+
       ]
     );
 
@@ -50,6 +63,14 @@ router.post("/", protect, authorize("recruiter"), async (req, res) => {
           "job"
         ]
       );
+    }
+
+    const io = req.app.get("io");
+    if (io) {
+      io.to(`user_${req.user.id}`).emit("newJob", {
+        jobId: result.insertId,
+        recruiterId: req.user.id,
+      });
     }
 
     res.status(201).json({

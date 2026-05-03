@@ -37,18 +37,33 @@ router.post("/", protect, authorize("recruiter"), async (req, res) => {
     );
 
     // 🔔 Notification pour candidate
-    await db.query(
-      `
-      INSERT INTO notifications (user_id, title, message, type)
-      VALUES (?, ?, ?, ?)
-      `,
-      [
-        candidate_id,
-        "New recruiter request",
-        "A recruiter sent you a request.",
-        "request"
-      ]
-    );
+const [notifResult] = await db.query(
+  `
+  INSERT INTO notifications (user_id, title, message, type)
+  VALUES (?, ?, ?, ?)
+  `,
+  [
+    candidate_id,
+    "New recruiter request",
+    "A recruiter sent you a request.",
+    "request"
+  ]
+);
+
+// 🔥 REALTIME
+const io = req.app.get("io");
+
+if (io) {
+  io.to(`user_${candidate_id}`).emit("newNotification", {
+  id: notifResult.insertId,
+  user_id: candidate_id,
+  title: "New recruiter request",
+  message: "A recruiter sent you a request.",
+  type: "request",
+  is_read: 0,
+  created_at: new Date()
+});
+}
 
     res.status(201).json({
       message: "Request envoyée avec succès"
@@ -173,19 +188,33 @@ router.put("/:id", protect, authorize("candidate"), async (req, res) => {
       [status, id]
     );
 
-    // 🔔 Notification pour recruiter
-    await db.query(
-      `
-      INSERT INTO notifications (user_id, title, message, type)
-      VALUES (?, ?, ?, ?)
-      `,
-      [
-        request.recruiter_id,
-        "Request updated",
-        `Your access request was ${status}.`,
-        "request"
-      ]
-    );
+    const [notifResult] = await db.query(
+  `
+  INSERT INTO notifications (user_id, title, message, type)
+  VALUES (?, ?, ?, ?)
+  `,
+  [
+    request.recruiter_id,
+    "Request updated",
+    `Your access request was ${status}.`,
+    "request"
+  ]
+);
+
+// 🔥 REALTIME
+const io = req.app.get("io");
+
+if (io) {
+  io.to(`user_${request.recruiter_id}`).emit("newNotification", {
+  id: notifResult.insertId,
+  user_id: request.recruiter_id,
+  title: "Request updated",
+  message: `Your access request was ${status}.`,
+  type: "request",
+  is_read: 0,
+  created_at: new Date()
+});
+}
 
     res.status(200).json({
       message: "Request mise à jour avec succès"

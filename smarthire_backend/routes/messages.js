@@ -3,17 +3,14 @@ const router = express.Router();
 const db = require("../config/db");
 const { protect } = require("../middleware/authMiddleware");
 
-
 // ==============================
 // CREATE OR GET CONVERSATION
 // ==============================
 router.post("/conversation", protect, async (req, res) => {
   try {
-    const { user_id } = req.body; // 🔥 generic (candidate OR recruiter)
-
+    const { user_id } = req.body;
     const currentUser = req.user.id;
 
-    // 🔍 check if conversation exists
     const [existing] = await db.query(
       `
       SELECT * FROM conversations 
@@ -31,7 +28,6 @@ router.post("/conversation", protect, async (req, res) => {
       });
     }
 
-    // 🧠 déterminer qui est candidate / recruiter
     const [users] = await db.query(
       "SELECT id, role FROM users WHERE id IN (?, ?)",
       [currentUser, user_id]
@@ -46,7 +42,6 @@ router.post("/conversation", protect, async (req, res) => {
       });
     }
 
-    // 📝 create conversation
     const [result] = await db.query(
       `
       INSERT INTO conversations (candidate_id, recruiter_id)
@@ -61,6 +56,7 @@ router.post("/conversation", protect, async (req, res) => {
     });
 
   } catch (err) {
+    console.error(err);
     res.status(500).json({
       message: "Erreur serveur",
       error: err.message
@@ -68,9 +64,8 @@ router.post("/conversation", protect, async (req, res) => {
   }
 });
 
-
 // ==============================
-// GET MY CONVERSATIONS (INBOX)
+// GET MY CONVERSATIONS
 // ==============================
 router.get("/conversations", protect, async (req, res) => {
   try {
@@ -78,16 +73,26 @@ router.get("/conversations", protect, async (req, res) => {
 
     const [rows] = await db.query(
       `
-      SELECT 
+      SELECT
         conversations.*,
-        u.full_name AS other_user_name
+        u.full_name AS other_user_name,
+        cp.name AS company_name,
+        COALESCE(unread.unread_count, 0) AS unread_count
       FROM conversations
-      JOIN users u 
+      JOIN users u
         ON u.id = IF(conversations.candidate_id = ?, conversations.recruiter_id, conversations.candidate_id)
+      LEFT JOIN company_profiles cp
+        ON cp.user_id = IF(conversations.candidate_id = ?, conversations.recruiter_id, conversations.candidate_id)
+      LEFT JOIN (
+        SELECT conversation_id, COUNT(*) AS unread_count
+        FROM messages
+        WHERE sender_id != ?
+        GROUP BY conversation_id
+      ) unread ON unread.conversation_id = conversations.id
       WHERE conversations.candidate_id = ? OR conversations.recruiter_id = ?
       ORDER BY conversations.created_at DESC
       `,
-      [userId, userId, userId]
+      [userId, userId, userId, userId, userId]
     );
 
     res.status(200).json({
@@ -96,6 +101,7 @@ router.get("/conversations", protect, async (req, res) => {
     });
 
   } catch (err) {
+    console.error(err);
     res.status(500).json({
       message: "Erreur serveur",
       error: err.message
@@ -103,15 +109,13 @@ router.get("/conversations", protect, async (req, res) => {
   }
 });
 
-
 // ==============================
-// SEND MESSAGE (WITH FILE)
+// SEND MESSAGE (REALTIME 🔥)
 // ==============================
 router.post("/", protect, async (req, res) => {
   try {
-    const { conversation_id, message, file_url } = req.body;
+    const { conversation_id, message } = req.body;
 
-    // 🔍 vérifier access
     const [conv] = await db.query(
       `
       SELECT * FROM conversations
@@ -126,36 +130,92 @@ router.post("/", protect, async (req, res) => {
       });
     }
 
-    // 📝 insert message
     const [result] = await db.query(
       `
-      INSERT INTO messages (conversation_id, sender_id, message, file_url)
-      VALUES (?, ?, ?, ?)
+      INSERT INTO messages (conversation_id, sender_id, message)
+      VALUES (?, ?, ?)
       `,
-      [conversation_id, req.user.id, message, file_url || null]
+      [conversation_id, req.user.id, message]
     );
+
+    const createdAt = new Date();
+
+    // 🔥 SOCKET REALTIME
+    const io = req.app.get("io");
+
+    if (io) {
+      io.to(conversation_id).emit("newMessage", {
+        id: result.insertId,
+        conversation_id,
+        sender_id: req.user.id,
+        message,
+        created_at: createdAt.toISOString(),
+      });
+    }
 
     res.status(201).json({
       message: "Message envoyé",
-      messageId: result.insertId
+      messageId: result.insertId,
+      created_at: createdAt.toISOString(),
     });
 
   } catch (err) {
-    res.status(500).json({
-      message: "Erreur serveur"
-    });
+  console.error("ERROR SEND MESSAGE:", err);
+
+  res.status(500).json({
+    message: "Erreur serveur",
+    error: err.message
+  });
+}
+});
+
+// ==============================
+// DELETE MESSAGE
+// ==============================
+router.delete("/:messageId", protect, async (req, res) => {
+  try {
+    const { messageId } = req.params;
+
+    const [rows] = await db.query(
+      `SELECT * FROM messages WHERE id = ?`,
+      [messageId]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ message: "Message introuvable" });
+    }
+
+    const message = rows[0];
+    if (message.sender_id !== req.user.id) {
+      return res.status(403).json({ message: "Action interdite" });
+    }
+
+    await db.query(
+      `DELETE FROM messages WHERE id = ?`,
+      [messageId]
+    );
+
+    const io = req.app.get("io");
+    if (io) {
+      io.to(message.conversation_id).emit("deleteMessage", {
+        id: Number(messageId),
+      });
+    }
+
+    res.status(200).json({ message: "Message supprimé" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Erreur serveur", error: err.message });
   }
 });
 
-
 // ==============================
-// GET MESSAGES OF CONVERSATION
+// GET MESSAGES
 // ==============================
 router.get("/:conversationId", protect, async (req, res) => {
   try {
     const { conversationId } = req.params;
 
-    // 🔍 vérifier access
     const [conv] = await db.query(
       `
       SELECT * FROM conversations
@@ -189,6 +249,7 @@ router.get("/:conversationId", protect, async (req, res) => {
     });
 
   } catch (err) {
+    console.error(err);
     res.status(500).json({
       message: "Erreur serveur"
     });

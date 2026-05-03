@@ -307,6 +307,9 @@ class _CandidateProfileScreenState extends State<CandidateProfileScreen> {
     final String githubLink = _safeString(profile?['github_link']);
     final String behanceLink = _safeString(profile?['behance_link']);
     final String personalWebsite = _safeString(profile?['personal_website']);
+    final String phone = _safeString(profile?['phone_number'], fallback: "Not added yet");
+    final String email = _safeString(profile?['email'], fallback: "Not added yet");
+
     final String profilePhoto =
         profile?['profile_photo'] != null && profile?['profile_photo'] != ""
         ? "http://192.168.100.47:5000/${profile!['profile_photo']}"
@@ -364,11 +367,15 @@ class _CandidateProfileScreenState extends State<CandidateProfileScreen> {
                         behanceLink: behanceLink,
                         personalWebsite: personalWebsite,
                       ),
-                      const SizedBox(height: 24),
-                      _buildSectionTitle("Documents"),
+                      _buildSectionTitle("Contact"),
                       const SizedBox(height: 12),
-                      _buildDocumentCard(),
-                      const SizedBox(height: 26),
+                      _buildContactCard(
+                        phone: phone,
+                        email: email,
+                      ),
+                      const SizedBox(height: 24),
+                      
+                     
                     ],
                   ),
                 ),
@@ -803,7 +810,7 @@ class _CandidateProfileScreenState extends State<CandidateProfileScreen> {
   }
 
   // Carte réservée aux documents du candidat, ici un PDF de CV avec un bouton.
-  Widget _buildDocumentCard() {
+  /*Widget _buildDocumentCard() {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
@@ -874,5 +881,56 @@ class _CandidateProfileScreenState extends State<CandidateProfileScreen> {
         ],
       ),
     );
-  }
+  }*/
+
+  // Carte affichant les informations de contact du candidat (téléphone et email).
+  Widget _buildContactCard({
+  required String phone,
+  required String email,
+}) {
+  final items = [
+    {"label": "Phone", "value": phone},
+    {"label": "Email", "value": email},
+  ];
+
+  return Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(18),
+    decoration: BoxDecoration(
+      color: cardColor,
+      borderRadius: BorderRadius.circular(22),
+      border: Border.all(color: cardBorderColor),
+    ),
+    child: Column(
+      children: items.map((item) {
+        final value = item["value"] ?? "";
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: 80,
+                child: Text(
+                  item["label"] ?? "",
+                  style: const TextStyle(
+                    color: Color(0x8CFFFFFF),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Text(
+                  value.isEmpty ? "Not added yet" : value,
+                  style: const TextStyle(color: Colors.white, fontSize: 14),
+                ),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
+    ),
+  );
+}
 }

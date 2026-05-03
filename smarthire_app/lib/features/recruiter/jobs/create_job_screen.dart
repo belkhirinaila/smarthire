@@ -24,6 +24,11 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
   final salaryMaxController = TextEditingController();
 
   final skillController = TextEditingController();
+  final requirementsController = TextEditingController();
+  final experienceController = TextEditingController();
+  final educationController = TextEditingController();
+  final languagesController = TextEditingController();
+  final teamController = TextEditingController();
 
   String selectedType = "Full-time";
   String selectedMode = "Remote";
@@ -74,7 +79,13 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
         "type": selectedType,
         "work_mode": selectedMode,
         "skills": skills,
-        "status": status // 🔥 مهم
+        "status": status,
+        "requirements": requirementsController.text,
+        "experience": experienceController.text,
+        "education": educationController.text,
+        "languages": languagesController.text,
+        "team": teamController.text,
+        
       }),
     );
 
@@ -232,6 +243,122 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
                         )
                       ],
                     )),
+
+                    const SizedBox(height: 16),
+                    // REQUIREMENTS
+                    _card(Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text("Requirements",
+                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 10),
+                        TextField(
+                          controller: requirementsController,
+                          style: const TextStyle(color: Colors.white),
+                          maxLines: 5,
+                          decoration: const InputDecoration(
+                            hintText: "List the job requirements here",
+                            hintStyle: TextStyle(color: Colors.white54),
+                            border: InputBorder.none,
+                          ),
+                        )
+                      ],
+                    )),
+
+                    const SizedBox(height: 16),
+
+                    // EXPERIENCE
+                    _card(Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text("Experience",
+                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 10),
+                        TextField(
+                          controller: experienceController,
+                          style: const TextStyle(color: Colors.white),
+                          maxLines: 5,
+                          decoration: const InputDecoration(
+                            hintText: "Describe the required experience",
+                            hintStyle: TextStyle(color: Colors.white54),
+                            border: InputBorder.none,
+                          ),
+                        )
+                      ],
+                    )),
+
+                    const SizedBox(height: 16),
+
+
+                    // EDUCATION
+                    _card(Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text("Education",
+                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 10),
+                        TextField(
+                          controller: educationController,
+                          style: const TextStyle(color: Colors.white),
+                          maxLines: 5,
+                          decoration: const InputDecoration(
+                            hintText: "Specify the educational requirements",
+                            hintStyle: TextStyle(color: Colors.white54),
+                            border: InputBorder.none,
+                          ),
+                        )
+                      ],  
+                    )),
+
+                    const SizedBox(height: 16),
+
+
+                    // LANGUAGES       
+                    _card(Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text("Languages",
+                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 10),
+                        TextField(
+                          controller: languagesController,
+                          style: const TextStyle(color: Colors.white),
+                          maxLines: 5,
+                          decoration: const InputDecoration(
+                            hintText: "List the required languages",
+                            hintStyle: TextStyle(color: Colors.white54),
+                            border: InputBorder.none,
+                          ),
+                        )
+                      ],  
+                    )), 
+
+                    const SizedBox(height: 16),
+
+
+                    // TEAM
+                    _card(  Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text("Team",
+                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 10),
+                        TextField(
+                          controller: teamController,
+                          style: const TextStyle(color: Colors.white),
+                          maxLines: 5,
+                          decoration: const InputDecoration(
+                            hintText: "Describe the team and company culture",
+                            hintStyle: TextStyle(color: Colors.white54),
+                            border: InputBorder.none,
+                          ),
+                        )
+                      ],  
+                    )), 
+
+                    const SizedBox(height: 16),
+
+
                   ],
                 ),
               ),

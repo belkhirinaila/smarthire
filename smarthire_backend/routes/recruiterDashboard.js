@@ -3,93 +3,109 @@ const router = express.Router();
 const db = require("../config/db");
 const { protect, authorize } = require("../middleware/authMiddleware");
 
-
 // ==============================
-// GET DASHBOARD STATS
+// 📊 DASHBOARD DATA
 // ==============================
 router.get("/", protect, authorize("recruiter"), async (req, res) => {
   try {
     const recruiterId = req.user.id;
 
-    // ==============================
-    // 🔍 Total jobs du recruiter
-    // ==============================
-    const [jobs] = await db.query(
-      "SELECT id FROM jobs WHERE created_by = ?",
+    // 🔥 1. TOTAL APPLICANTS
+    const [totalApplicants] = await db.query(
+      `
+      SELECT COUNT(*) as total
+      FROM applications a
+      JOIN jobs j ON j.id = a.job_id
+      WHERE j.created_by = ?
+      `,
       [recruiterId]
     );
 
-    const jobIds = jobs.map(j => j.id);
-
-    if (jobIds.length === 0) {
-      return res.status(200).json({
-        totalApplicants: 0,
-        activeJobs: 0,
-        interviewing: 0,
-        trends: []
-      });
-    }
-
-    // ==============================
-    // 🔍 Total applicants
-    // ==============================
-    const [totalApplicantsResult] = await db.query(
+    // 🔥 2. ACTIVE JOBS
+    const [activeJobs] = await db.query(
       `
-      SELECT COUNT(*) AS total 
-      FROM applications
-      WHERE job_id IN (${jobIds.map(() => "?").join(",")})
-      `,
-      jobIds
-    );
-
-    // ==============================
-    // 🔍 Active jobs
-    // ==============================
-    const [activeJobsResult] = await db.query(
-      `
-      SELECT COUNT(*) AS total
+      SELECT COUNT(*) as total
       FROM jobs
-      WHERE created_by = ? AND status = 'active'
+      WHERE created_by = ? AND status != 'closed'
       `,
       [recruiterId]
     );
 
-    // ==============================
-    // 🔍 Interviewing (shortlisted)
-    // ==============================
-    const [interviewingResult] = await db.query(
+    // 🔥 3. PENDING APPLICATIONS
+    const [pending] = await db.query(
       `
-      SELECT COUNT(*) AS total
-      FROM applications
-      WHERE status = 'shortlisted'
-      AND job_id IN (${jobIds.map(() => "?").join(",")})
+      SELECT COUNT(*) as total
+      FROM applications a
+      JOIN jobs j ON j.id = a.job_id
+      WHERE j.created_by = ? AND a.status = 'pending'
       `,
-      jobIds
+      [recruiterId]
     );
 
-    // ==============================
-    // 🔍 Applications last 7 days (graph)
-    // ==============================
-    const [trends] = await db.query(
+    // 🔥 4. INTERVIEWING
+    const [interviewing] = await db.query(
       `
-      SELECT DATE(created_at) as date, COUNT(*) as count
-      FROM applications
-      WHERE job_id IN (${jobIds.map(() => "?").join(",")})
-      AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
-      GROUP BY DATE(created_at)
-      ORDER BY DATE(created_at)
+      SELECT COUNT(*) as total
+      FROM applications a
+      JOIN jobs j ON j.id = a.job_id
+      WHERE j.created_by = ? AND a.status = 'shortlisted'
       `,
-      jobIds
+      [recruiterId]
     );
+
+    // 🔥 5. RECENT APPLICANTS
+    const [recentApplicants] = await db.query(
+      `
+      SELECT 
+        users.full_name,
+        applications.status,
+        applications.created_at
+      FROM applications
+      JOIN users ON users.id = applications.candidate_id
+      JOIN jobs ON jobs.id = applications.job_id
+      WHERE jobs.created_by = ?
+      ORDER BY applications.created_at DESC
+      LIMIT 5
+      `,
+      [recruiterId]
+    );
+
+    // 🔥 6. CHART (last 7 days)
+     const [chart] = await db.query(
+     `
+      SELECT 
+        DATE(a.created_at) as date,
+        COUNT(DISTINCT a.id) as applicants,
+        COUNT(DISTINCT j.id) as jobs
+      FROM jobs j
+      LEFT JOIN applications a ON j.id = a.job_id
+      WHERE j.created_by = ?
+      AND (a.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY) OR a.created_at IS NULL)
+      GROUP BY DATE(a.created_at)
+      ORDER BY date ASC
+      `,
+      [recruiterId]
+    );
+      // 🔥 GET COMPANY NAME
+      const [company] = await db.query(
+  "SELECT name, logo FROM company_profiles WHERE user_id = ?",
+  [recruiterId]
+);
 
     res.status(200).json({
-      totalApplicants: totalApplicantsResult[0].total,
-      activeJobs: activeJobsResult[0].total,
-      interviewing: interviewingResult[0].total,
-      trends
+      stats: {
+        totalApplicants: totalApplicants[0].total,
+        activeJobs: activeJobs[0].total,
+        pending: pending[0].total,
+        interviewing: interviewing[0].total
+      },
+      recentApplicants,
+      chartData: chart,
+      company: company[0] || null
     });
 
   } catch (err) {
+    console.error(err);
     res.status(500).json({
       message: "Erreur serveur",
       error: err.message

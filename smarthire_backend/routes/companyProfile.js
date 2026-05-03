@@ -9,24 +9,55 @@ const { protect, authorize } = require("../middleware/authMiddleware");
 // ==============================
 router.get("/me", protect, authorize("recruiter"), async (req, res) => {
   try {
-    // 🔍 récupérer la company liée au recruiter
-    const [rows] = await db.query(
+    // 🔥 1. company
+    const [companyRows] = await db.query(
       "SELECT * FROM company_profiles WHERE user_id = ?",
       [req.user.id]
     );
 
-    if (rows.length === 0) {
+    if (companyRows.length === 0) {
       return res.status(200).json({
-        message: "Company non encore créée",
-        company: null
+        company: null,
+        jobs: [],
+        stats: {}
       });
     }
 
+    const company = companyRows[0];
+
+    // 🔥 2. jobs (IMPORTANT)
+    const [jobs] = await db.query(
+      "SELECT * FROM jobs WHERE recruiter_id = ? ORDER BY created_at DESC",
+      [req.user.id]
+    );
+
+    // 🔥 3. applications count
+    const [applications] = await db.query(
+      `
+      SELECT COUNT(*) as total 
+      FROM applications a
+      JOIN jobs j ON a.job_id = j.id
+      WHERE j.recruiter_id = ?
+      `,
+      [req.user.id]
+    );
+
+    // 🔥 4. stats REAL
+    const stats = {
+      jobs: jobs.length,
+      applications: applications[0].total,
+      employees: company.company_size || 0
+    };
+
+    // 🔥 FINAL RESPONSE
     res.status(200).json({
-      company: rows[0]
+      company,
+      jobs,
+      stats
     });
 
   } catch (err) {
+    console.error(err);
     res.status(500).json({
       message: "Erreur serveur",
       error: err.message
@@ -126,35 +157,49 @@ router.put("/", protect, authorize("recruiter"), async (req, res) => {
     }
 
     // 🔄 update
-    await db.query(
+    const [updateResult] = await db.query(
       `
       UPDATE company_profiles
-      SET 
+      SET
         name = ?,
-        industry = ?,
-        website = ?,
         description = ?,
-        logo = ?,
-        cover_image = ?,
+        website = ?,
         location = ?,
+        industry = ?,
         company_size = ?
       WHERE user_id = ?
       `,
       [
         name,
-        industry,
-        website,
         description,
-        logo,
-        cover_image,
+        website,
         location,
+        industry,
         company_size,
         req.user.id
       ]
     );
 
+    console.log("Company profile update result:", {
+      userId: req.user.id,
+      name,
+      description,
+      website,
+      location,
+      industry,
+      company_size,
+      affectedRows: updateResult.affectedRows
+    });
+
+    if (updateResult.affectedRows === 0) {
+      return res.status(400).json({
+        message: "Aucune ligne mise à jour"
+      });
+    }
+
     res.status(200).json({
-      message: "Company mise à jour avec succès"
+      message: "Company mise à jour avec succès",
+      affectedRows: updateResult.affectedRows
     });
 
   } catch (err) {
