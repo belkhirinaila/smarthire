@@ -3,43 +3,92 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
-// Écran de décision de demande.
-// Cet écran affiche les détails d'une demande d'accès envoyée par un recruteur
-// et permet d'accepter ou de refuser cette demande.
 class RequestDecisionScreen extends StatefulWidget {
-  const RequestDecisionScreen({super.key});
+  final dynamic request;
+
+  const RequestDecisionScreen({
+    super.key,
+    required this.request,
+  });
 
   @override
   State<RequestDecisionScreen> createState() => _RequestDecisionScreenState();
 }
 
 class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
-  // Couleurs utilisées par l'interface pour garder un style cohérent.
   static const Color primaryBlue = Color(0xFF1E6CFF);
   static const Color backgroundTop = Color(0xFF08162D);
   static const Color backgroundBottom = Color(0xFF050A12);
   static const Color cardColor = Color(0xFF121C31);
 
-  // URL de base vers l'API backend.
   static const String baseUrl = 'http://192.168.100.47:5000/api';
+  static const String serverUrl = 'http://192.168.100.47:5000';
 
-  // Indique si l'utilisateur est en train d'accepter la demande.
   bool isAccepting = false;
-
-  // Indique si l'utilisateur est en train de décliner la demande.
   bool isDeclining = false;
 
-  // Méthode générique qui met à jour le statut de la demande sur le serveur.
-  Future<void> _updateRequestStatus(String status) async {
-    // Récupère les arguments passés via la route de navigation.
-    final args =
-        ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+  Map<String, dynamic> getArgs() {
+    final Map<String, dynamic> args = {};
 
-    // L'identifiant de la demande doit être présent pour effectuer la mise à jour.
-    final requestId = args?['id'];
+    if (widget.request is Map) {
+      widget.request.forEach((key, value) {
+        args[key.toString()] = value;
+      });
+    }
+
+    return args;
+  }
+
+  String? fixImageUrl(dynamic value) {
+    if (value == null) return null;
+
+    final image = value.toString().trim();
+
+    if (image.isEmpty || image == "null" || image == "NULL") return null;
+    if (image.startsWith("http")) return image;
+    if (image.startsWith("/")) return "$serverUrl$image";
+
+    return "$serverUrl/$image";
+  }
+
+  String? getCompanyLogo(Map<String, dynamic> args) {
+    final keys = [
+      "company_logo",
+      "logo",
+      "logo_url",
+      "companyLogo",
+      "company_image",
+      "image",
+      "profile_image",
+      "profile_photo",
+      "photo",
+    ];
+
+    for (final key in keys) {
+      final logo = fixImageUrl(args[key]);
+      if (logo != null) return logo;
+    }
+
+    return null;
+  }
+
+  Color getStatusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'approved':
+        return const Color(0xFF22C55E);
+      case 'rejected':
+        return const Color(0xFFFF5A6E);
+      case 'pending':
+      default:
+        return const Color(0xFFFFB020);
+    }
+  }
+
+  Future<void> updateRequestStatus(String status) async {
+    final args = getArgs();
+    final requestId = args['id'] ?? args['request_id'];
 
     if (requestId == null) {
-      // Affiche une erreur si l'identifiant n'est pas disponible.
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Request ID introuvable")),
       );
@@ -47,7 +96,6 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
     }
 
     try {
-      // Récupère le token stocké localement pour authentifier la requête.
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('token');
 
@@ -58,7 +106,6 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
         return;
       }
 
-      // Envoie la requête PUT au backend pour mettre à jour le statut.
       final response = await http.put(
         Uri.parse('$baseUrl/requests/$requestId'),
         headers: {
@@ -68,21 +115,16 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
         body: jsonEncode({'status': status}),
       );
 
-      // Convertit la réponse JSON pour extraire les messages éventuels.
       final data = jsonDecode(response.body);
 
       if (!mounted) return;
 
-      // Si la mise à jour réussit, informe l'utilisateur et revient en arrière.
       if (response.statusCode == 200) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(data['message'] ?? "Request mise à jour"),
-          ),
+          SnackBar(content: Text(data['message'] ?? "Request mise à jour")),
         );
         Navigator.pop(context);
       } else {
-        // Si le serveur retourne une erreur, affiche le message renvoyé.
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(data['message'] ?? "Erreur lors de la mise à jour"),
@@ -91,53 +133,91 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
       }
     } catch (e) {
       if (!mounted) return;
-      // En cas d'exception de réseau ou d'erreur inattendue, on affiche un message générique.
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Erreur de connexion au serveur")),
       );
     }
   }
 
-  // Lance l'acceptation de la demande et affiche un état chargé.
-  Future<void> _acceptRequest() async {
+  Future<void> acceptRequest() async {
     setState(() => isAccepting = true);
-    await _updateRequestStatus('approved');
-    if (mounted) {
-      setState(() => isAccepting = false);
-    }
+    await updateRequestStatus('approved');
+    if (mounted) setState(() => isAccepting = false);
   }
 
-  // Lance le refus de la demande et affiche un état chargé.
-  Future<void> _declineRequest() async {
+  Future<void> declineRequest() async {
     setState(() => isDeclining = true);
-    await _updateRequestStatus('rejected');
-    if (mounted) {
-      setState(() => isDeclining = false);
-    }
+    await updateRequestStatus('rejected');
+    if (mounted) setState(() => isDeclining = false);
+  }
+
+  Widget logoWidget(String? logo) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        width: 62,
+        height: 62,
+        color: Colors.white.withOpacity(0.06),
+        child: logo == null
+            ? const Icon(
+                Icons.business_rounded,
+                color: Colors.white54,
+                size: 30,
+              )
+            : Image.network(
+                logo,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) {
+                  return const Icon(
+                    Icons.business_rounded,
+                    color: Colors.white54,
+                    size: 30,
+                  );
+                },
+              ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    // Les arguments sont fournis par l'écran précédent lors de la navigation.
-    final args =
-        ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+    final args = getArgs();
 
-    // Extraction des valeurs affichées à l'écran avec des valeurs par défaut si elles manquent.
-    final String company = args?['company'] ?? "Recruiter";
-    final String title = args?['title'] ?? "Access Request";
+    final String recruiterName =
+        args['recruiter_name']?.toString().trim().isNotEmpty == true
+            ? args['recruiter_name'].toString()
+            : args['company']?.toString().trim().isNotEmpty == true
+                ? args['company'].toString()
+                : args['full_name']?.toString().trim().isNotEmpty == true
+                    ? args['full_name'].toString()
+                    : "Recruiter";
+
+    final String companyName =
+        args['company_name']?.toString().trim().isNotEmpty == true
+            ? args['company_name'].toString()
+            : "Company";
+
+    final String title = args['title']?.toString() ?? "Access Request";
+
     final String subtitle =
-        args?['subtitle'] ?? "A recruiter wants to access your profile.";
-    final String time = args?['time'] ?? "Recently";
-    final String type = args?['type'] ?? "PENDING";
-    final Color badgeColor = args?['color'] ?? primaryBlue;
+        args['subtitle']?.toString() ?? "$companyName wants to access your profile.";
 
-    final String longDescription =
-        args?['description'] ??
-            "This recruiter sent you an access request through the platform. "
-                "You can approve it to allow further interaction or reject it to close this request.";
+    final String time = args['time']?.toString() ?? "Recently";
 
-    // Construction de l'interface principale de l'écran.
-    // Le Scaffold contient le contenu principal et la barre d'action en bas.
+    final String status =
+        args['status']?.toString() ?? args['type']?.toString() ?? "pending";
+
+    final String type = status.toUpperCase();
+
+    final Color badgeColor = getStatusColor(status);
+
+    final String? logo = getCompanyLogo(args);
+
+    final String longDescription = args['description']?.toString() ??
+        "$recruiterName from $companyName sent you an access request through SmartHire. "
+            "You can approve it to allow further interaction or reject it to close this request.";
+
     return Scaffold(
       backgroundColor: backgroundBottom,
       body: Container(
@@ -150,51 +230,50 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
           ),
         ),
         child: SafeArea(
-          child: Column(
-            children: [
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(18, 14, 18, 120),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildTopBar(context),
-                      const SizedBox(height: 24),
-                      _buildMainCard(
-                        company: company,
-                        title: title,
-                        subtitle: subtitle,
-                        time: time,
-                        type: type,
-                        badgeColor: badgeColor,
-                      ),
-                      const SizedBox(height: 24),
-                      _buildSectionTitle("Request Details"),
-                      const SizedBox(height: 12),
-                      _buildDescriptionCard(longDescription),
-                      const SizedBox(height: 24),
-                      _buildSectionTitle("What can you do?"),
-                      const SizedBox(height: 12),
-                      _buildActionsInfoCard(),
-                      const SizedBox(height: 24),
-                      _buildSectionTitle("Contact Overview"),
-                      const SizedBox(height: 12),
-                      _buildContactOverviewCard(company, time, type),
-                      const SizedBox(height: 30),
-                    ],
-                  ),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(18, 14, 18, 120),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                buildTopBar(context),
+                const SizedBox(height: 24),
+                buildMainCard(
+                  recruiterName: recruiterName,
+                  companyName: companyName,
+                  title: title,
+                  subtitle: subtitle,
+                  time: time,
+                  type: type,
+                  badgeColor: badgeColor,
+                  logo: logo,
                 ),
-              ),
-            ],
+                const SizedBox(height: 24),
+                buildSectionTitle("Request Details"),
+                const SizedBox(height: 12),
+                buildDescriptionCard(longDescription),
+                const SizedBox(height: 24),
+                buildSectionTitle("What can you do?"),
+                const SizedBox(height: 12),
+                buildActionsInfoCard(),
+                const SizedBox(height: 24),
+                buildSectionTitle("Contact Overview"),
+                const SizedBox(height: 12),
+                buildContactOverviewCard(
+                  recruiterName: recruiterName,
+                  companyName: companyName,
+                  time: time,
+                  status: type,
+                ),
+              ],
+            ),
           ),
         ),
       ),
-      bottomNavigationBar: _buildBottomBar(context, args),
+      bottomNavigationBar: buildBottomBar(status),
     );
   }
 
-  // Barre supérieure de l'écran contenant le bouton de retour et le titre.
-  Widget _buildTopBar(BuildContext context) {
+  Widget buildTopBar(BuildContext context) {
     return Row(
       children: [
         GestureDetector(
@@ -242,14 +321,15 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
     );
   }
 
-  // Carte principale qui présente les informations de base de la demande.
-  Widget _buildMainCard({
-    required String company,
+  Widget buildMainCard({
+    required String recruiterName,
+    required String companyName,
     required String title,
     required String subtitle,
     required String time,
     required String type,
     required Color badgeColor,
+    required String? logo,
   }) {
     return Container(
       width: double.infinity,
@@ -261,45 +341,32 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
       ),
       child: Column(
         children: [
-          // Ligne supérieure avec l'icône de l'entreprise et le titre principal.
           Row(
             children: [
-              Container(
-                width: 62,
-                height: 62,
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.06),
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                child: const Icon(
-                  Icons.business_rounded,
-                  color: Colors.white54,
-                  size: 30,
-                ),
-              ),
+              logoWidget(logo),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      company,
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.55),
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+                      recruiterName,
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 18,
                         fontWeight: FontWeight.w800,
                         height: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      companyName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.55),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],
@@ -308,6 +375,18 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
             ],
           ),
           const SizedBox(height: 18),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              title,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
           Align(
             alignment: Alignment.centerLeft,
             child: Text(
@@ -320,10 +399,9 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
             ),
           ),
           const SizedBox(height: 18),
-          // Ligne avec le badge de statut et l'heure de réception.
           Row(
             children: [
-              _buildTypeBadge(
+              buildTypeBadge(
                 text: type,
                 color: badgeColor,
               ),
@@ -352,8 +430,7 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
     );
   }
 
-  // Titre de section utilisé pour les différents blocs de contenu.
-  Widget _buildSectionTitle(String title) {
+  Widget buildSectionTitle(String title) {
     return Text(
       title,
       style: const TextStyle(
@@ -364,8 +441,7 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
     );
   }
 
-  // Carte qui affiche la description longue de la demande.
-  Widget _buildDescriptionCard(String text) {
+  Widget buildDescriptionCard(String text) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
@@ -385,8 +461,7 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
     );
   }
 
-  // Carte qui présente les actions possibles pour cette demande.
-  Widget _buildActionsInfoCard() {
+  Widget buildActionsInfoCard() {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
@@ -397,30 +472,28 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
       ),
       child: Column(
         children: const [
-          _ActionInfoRow(
+          ActionInfoRow(
             icon: Icons.check_circle_outline_rounded,
             title: "Accept",
             subtitle: "Approve the request and allow the recruiter to continue.",
           ),
           SizedBox(height: 16),
-          _ActionInfoRow(
+          ActionInfoRow(
             icon: Icons.cancel_outlined,
             title: "Decline",
             subtitle: "Reject the request and close this interaction.",
-          ),
-          SizedBox(height: 16),
-          _ActionInfoRow(
-            icon: Icons.chat_bubble_outline_rounded,
-            title: "Open Chat",
-            subtitle: "Open or continue the direct conversation.",
           ),
         ],
       ),
     );
   }
 
-  // Carte qui affiche un aperçu de l'entreprise, du temps et du statut.
-  Widget _buildContactOverviewCard(String company, String time, String status) {
+  Widget buildContactOverviewCard({
+    required String recruiterName,
+    required String companyName,
+    required String time,
+    required String status,
+  }) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
@@ -431,19 +504,25 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
       ),
       child: Column(
         children: [
-          _buildInfoRow(
-            icon: Icons.business_center_outlined,
+          buildInfoRow(
+            icon: Icons.person_outline_rounded,
             label: "Recruiter",
-            value: company,
+            value: recruiterName,
           ),
           const SizedBox(height: 16),
-          _buildInfoRow(
+          buildInfoRow(
+            icon: Icons.business_center_outlined,
+            label: "Company",
+            value: companyName,
+          ),
+          const SizedBox(height: 16),
+          buildInfoRow(
             icon: Icons.schedule_outlined,
             label: "Received",
             value: time,
           ),
           const SizedBox(height: 16),
-          _buildInfoRow(
+          buildInfoRow(
             icon: Icons.verified_user_outlined,
             label: "Status",
             value: status,
@@ -453,8 +532,7 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
     );
   }
 
-  // Ligne d'information utilisée à l'intérieur des cartes de résumé.
-  Widget _buildInfoRow({
+  Widget buildInfoRow({
     required IconData icon,
     required String label,
     required String value,
@@ -484,20 +562,23 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
             ),
           ),
         ),
-        Text(
-          value,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 15,
-            fontWeight: FontWeight.w700,
+        Flexible(
+          child: Text(
+            value,
+            textAlign: TextAlign.right,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ),
       ],
     );
   }
 
-  // Badge de type qui montre le statut de la demande.
-  Widget _buildTypeBadge({
+  Widget buildTypeBadge({
     required String text,
     required Color color,
   }) {
@@ -519,107 +600,81 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
     );
   }
 
-  // Barre du bas avec les boutons d'action pour accepter ou refuser la demande.
-  Widget _buildBottomBar(
-    BuildContext context,
-    Map<String, dynamic>? args,
-  ) {
+  Widget buildBottomBar(String status) {
+    final bool alreadyHandled =
+        status.toLowerCase() == "approved" ||
+        status.toLowerCase() == "rejected";
+
     return Container(
       color: backgroundBottom,
       padding: const EdgeInsets.fromLTRB(18, 12, 18, 24),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
+      child: Row(
         children: [
-          // Ligne de boutons principale pour Refuser ou Accepter.
-          Row(
-            children: [
-              Expanded(
-                child: SizedBox(
-                  height: 56,
-                  child: OutlinedButton(
-                    onPressed: isDeclining ? null : _declineRequest,
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.white,
-                      side: BorderSide(color: Colors.white.withOpacity(0.12)),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(18),
-                      ),
-                    ),
-                    child: isDeclining
-                        ? const SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(
-                              color: Colors.white,
-                              strokeWidth: 2.3,
-                            ),
-                          )
-
-                        : const Text(
-                            "Decline",
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
+          Expanded(
+            child: SizedBox(
+              height: 56,
+              child: OutlinedButton(
+                onPressed: alreadyHandled || isDeclining || isAccepting
+                    ? null
+                    : declineRequest,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  side: BorderSide(color: Colors.white.withOpacity(0.12)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
                   ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: SizedBox(
-                  height: 56,
-                  child: ElevatedButton(
-                    onPressed: isAccepting ? null : _acceptRequest,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: primaryBlue,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(18),
+                child: isDeclining
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2.3,
+                        ),
+                      )
+                    : const Text(
+                        "Decline",
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
-                    ),
-                    child: isAccepting
-                        ? const SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(
-                              color: Colors.white,
-                              strokeWidth: 2.3,
-                            ),
-                          )
-                        : const Text(
-                            "Accept",
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                  ),
-                ),
               ),
-            ],
+            ),
           ),
-          const SizedBox(height: 10),
-          // Bouton pour ouvrir la conversation directe avec le recruteur.
-          SizedBox(
-            width: double.infinity,
-            height: 52,
-            child: TextButton(
-              onPressed: () {
-                Navigator.pushNamed(
-                  context,
-                  '/direct-chat',
-                  arguments: args,
-                );
-              },
-              child: const Text(
-                "Open Chat",
-                style: TextStyle(
-                  color: primaryBlue,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 15,
+          const SizedBox(width: 12),
+          Expanded(
+            child: SizedBox(
+              height: 56,
+              child: ElevatedButton(
+                onPressed: alreadyHandled || isAccepting || isDeclining
+                    ? null
+                    : acceptRequest,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primaryBlue,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18),
+                  ),
                 ),
+                child: isAccepting
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2.3,
+                        ),
+                      )
+                    : const Text(
+                        "Accept",
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
               ),
             ),
           ),
@@ -629,13 +684,13 @@ class _RequestDecisionScreenState extends State<RequestDecisionScreen> {
   }
 }
 
-// Petit composant réutilisable pour afficher une ligne d'action avec icône, titre et description.
-class _ActionInfoRow extends StatelessWidget {
+class ActionInfoRow extends StatelessWidget {
   final IconData icon;
   final String title;
   final String subtitle;
 
-  const _ActionInfoRow({
+  const ActionInfoRow({
+    super.key,
     required this.icon,
     required this.title,
     required this.subtitle,

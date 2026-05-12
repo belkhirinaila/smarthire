@@ -14,8 +14,8 @@ class RecruiterHome extends StatefulWidget {
 }
 
 class _RecruiterHomeState extends State<RecruiterHome> with RouteAware {
-
   static const String baseUrl = 'http://192.168.100.47:5000/api';
+  static const String serverUrl = 'http://192.168.100.47:5000';
 
   static const Color primaryBlue = Color(0xFF1E6CFF);
   static const Color backgroundTop = Color(0xFF08162D);
@@ -30,11 +30,9 @@ class _RecruiterHomeState extends State<RecruiterHome> with RouteAware {
   String companyLogo = "";
 
   bool isLoading = true;
-
   int unreadCount = 0;
   late IO.Socket socket;
 
-  // ================= INIT =================
   @override
   void initState() {
     super.initState();
@@ -62,49 +60,58 @@ class _RecruiterHomeState extends State<RecruiterHome> with RouteAware {
     fetchUnread();
   }
 
+  String getImageUrl(dynamic path) {
+    if (path == null) return "";
+    final p = path.toString().trim();
+
+    if (p.isEmpty || p == "null" || p == "NULL") return "";
+    if (p.startsWith("http")) return p;
+    if (p.startsWith("/")) return "$serverUrl$p";
+
+    return "$serverUrl/$p";
+  }
+
+  bool isPublicProfile(dynamic value) {
+    return value == 1 || value == true || value.toString() == "1";
+  }
+
   Future<int> _getLoggedUserId() async {
     final prefs = await SharedPreferences.getInstance();
     final int? storedInt = prefs.getInt("userId");
     if (storedInt != null) return storedInt;
-    final String? storedString = prefs.getString("user_id") ?? prefs.getString("userId");
+    final String? storedString =
+        prefs.getString("user_id") ?? prefs.getString("userId");
     return int.tryParse(storedString ?? '') ?? 0;
   }
 
-  // ================= SOCKET =================
   void initSocket() {
     socket = IO.io(
-      "http://192.168.100.47:5000",
+      serverUrl,
       IO.OptionBuilder().setTransports(['websocket']).build(),
     );
 
     socket.connect();
 
     socket.onConnect((_) async {
-      print("🟢 SOCKET CONNECTED");
-
       final int userId = await _getLoggedUserId();
-
       socket.emit("joinUser", userId);
-      print("👤 Joined room: $userId");
     });
 
-    // 🔥 realtime badge
     socket.on("newNotification", (data) {
       setState(() {
         unreadCount++;
       });
     });
+
     socket.on("newApplication", (data) {
-      print("🔔 New application event received: $data");
       loadDashboard();
     });
 
     socket.on("newJob", (data) {
-      print("🔔 New job event received: $data");
       loadDashboard();
-    });  }
+    });
+  }
 
-  // ================= UNREAD =================
   Future<void> fetchUnread() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString("token");
@@ -117,11 +124,10 @@ class _RecruiterHomeState extends State<RecruiterHome> with RouteAware {
     final data = jsonDecode(res.body);
 
     setState(() {
-      unreadCount = data["count"];
+      unreadCount = data["count"] ?? 0;
     });
   }
 
-  // ================= DASHBOARD =================
   Future<void> loadDashboard() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -138,18 +144,17 @@ class _RecruiterHomeState extends State<RecruiterHome> with RouteAware {
         final rawStats = Map<String, dynamic>.from(data['stats'] ?? {});
         final totalApplicants = rawStats['totalApplicants'] ?? 0;
         final activeJobs = rawStats['activeJobs'] ?? 0;
+
         rawStats['applicationsPerJob'] = activeJobs > 0
             ? (totalApplicants / activeJobs).toStringAsFixed(1)
             : "0.0";
 
         setState(() {
           stats = rawStats;
-          recentApplicants = data['recentApplicants'];
-          chartData = data['chartData'];
-
+          recentApplicants = data['recentApplicants'] ?? [];
+          chartData = data['chartData'] ?? [];
           companyName = data['company']?['name'] ?? "";
           companyLogo = data['company']?['logo'] ?? "";
-
           isLoading = false;
         });
       } else {
@@ -160,10 +165,18 @@ class _RecruiterHomeState extends State<RecruiterHome> with RouteAware {
     }
   }
 
-  // ================= BUILD =================
+  void openApplicant(dynamic item) {
+    Navigator.pushNamed(
+      context,
+      "/candidate-profile-recruiter",
+      arguments: {
+        "userId": item["candidate_id"] ?? item["user_id"],
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-
     if (isLoading) {
       return const Scaffold(
         backgroundColor: backgroundBottom,
@@ -191,101 +204,22 @@ class _RecruiterHomeState extends State<RecruiterHome> with RouteAware {
               padding: const EdgeInsets.all(16),
               child: Column(
                 children: [
+                  _topBar(),
+                  const SizedBox(height: 20),
 
-                  // ================= TOP BAR =================
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-
-                      // 🔔 NOTIFICATIONS + BADGE
-                      Stack(
-                        children: [
-
-                          GestureDetector(
-                            onTap: () async {
-                              await Navigator.pushNamed(context, '/recruiter-notifications');
-                              fetchUnread(); // 🔥 refresh after back
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: const BoxDecoration(
-                                color: cardColor,
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(Icons.notifications_none, color: Colors.white),
-                            ),
-                          ),
-
-                          if (unreadCount > 0)
-                            Positioned(
-                              right: 2,
-                              top: 2,
-                              child: Container(
-                                padding: const EdgeInsets.all(5),
-                                decoration: const BoxDecoration(
-                                  color: Colors.red,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Text(
-                                  "$unreadCount",
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-
-                      // 🏢 NAME
                       Expanded(
-                        child: Text(
-                          companyName.isEmpty ? "My Company" : companyName,
-                          textAlign: TextAlign.center,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-
-                      // 🏢 LOGO
-                      Container(
-                        width: 42,
-                        height: 42,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
-                          child: companyLogo.isNotEmpty
-                              ? Image.network(
-                                  "http://192.168.100.47:5000/$companyLogo",
-                                  fit: BoxFit.cover,
-                                )
-                              : Container(
-                                  color: Colors.grey,
-                                  child: const Icon(Icons.business, color: Colors.white),
-                                ),
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  // ================= STATS =================
-                  Row(
-                    children: [
-                      Expanded(child: _stat("Applicants", stats?['totalApplicants'], Colors.orange)),
+                          child: _stat("Applicants",
+                              stats?['totalApplicants'], Colors.orange)),
                       const SizedBox(width: 10),
-                      Expanded(child: _stat("Jobs", stats?['activeJobs'], Colors.green)),
+                      Expanded(
+                          child:
+                              _stat("Jobs", stats?['activeJobs'], Colors.green)),
                       const SizedBox(width: 10),
-                      Expanded(child: _stat("Apps / Job", stats?['applicationsPerJob'], Colors.blueAccent)),
+                      Expanded(
+                          child: _stat("Apps / Job",
+                              stats?['applicationsPerJob'], Colors.blueAccent)),
                     ],
                   ),
 
@@ -293,29 +227,19 @@ class _RecruiterHomeState extends State<RecruiterHome> with RouteAware {
 
                   Row(
                     children: [
-                      Expanded(child: _stat("Pending", stats?['pending'], Colors.red)),
+                      Expanded(
+                          child:
+                              _stat("Pending", stats?['pending'], Colors.red)),
                       const SizedBox(width: 10),
-                      Expanded(child: _stat("Interview", stats?['interviewing'], primaryBlue)),
+                      Expanded(
+                          child: _stat(
+                              "Interview", stats?['interviewing'], primaryBlue)),
                     ],
                   ),
 
                   const SizedBox(height: 20),
-
                   _chart(),
-
-                  const SizedBox(height: 20),
-
-                  const Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      "Recent Applicants",
-                      style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700),
-                    ),
-                  ),
-
-                  const SizedBox(height: 10),
-
-                  _applicants(),
+                  
                 ],
               ),
             ),
@@ -325,7 +249,88 @@ class _RecruiterHomeState extends State<RecruiterHome> with RouteAware {
     );
   }
 
-  // ================= STAT =================
+  Widget _topBar() {
+    final logoUrl = getImageUrl(companyLogo);
+
+    return Row(
+      children: [
+        ClipOval(
+          child: Container(
+            width: 46,
+            height: 46,
+            color: cardColor,
+            child: logoUrl.isNotEmpty
+                ? Image.network(
+                    logoUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) {
+                      return const Icon(Icons.business, color: Colors.white);
+                    },
+                  )
+                : const Icon(Icons.business, color: Colors.white),
+          ),
+        ),
+
+        const SizedBox(width: 12),
+
+        Expanded(
+          child: Text(
+            companyName.isEmpty ? "My Company" : companyName,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+
+        Stack(
+          children: [
+            GestureDetector(
+              onTap: () async {
+                await Navigator.pushNamed(context, '/recruiter-notifications');
+                fetchUnread();
+              },
+              child: Container(
+                width: 46,
+                height: 46,
+                decoration: const BoxDecoration(
+                  color: cardColor,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.notifications_none,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+            if (unreadCount > 0)
+              Positioned(
+                right: 2,
+                top: 2,
+                child: Container(
+                  padding: const EdgeInsets.all(5),
+                  decoration: const BoxDecoration(
+                    color: Colors.red,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Text(
+                    "$unreadCount",
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
   Widget _stat(String title, dynamic val, Color color) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -335,8 +340,14 @@ class _RecruiterHomeState extends State<RecruiterHome> with RouteAware {
       ),
       child: Column(
         children: [
-          Text(val?.toString() ?? "0",
-              style: TextStyle(color: color, fontSize: 22, fontWeight: FontWeight.bold)),
+          Text(
+            val?.toString() ?? "0",
+            style: TextStyle(
+              color: color,
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
           const SizedBox(height: 5),
           Text(title, style: const TextStyle(color: Colors.white70)),
         ],
@@ -344,7 +355,6 @@ class _RecruiterHomeState extends State<RecruiterHome> with RouteAware {
     );
   }
 
-  // ================= CHART =================
   Widget _chart() {
     if (chartData.isEmpty) {
       return Container(
@@ -354,7 +364,10 @@ class _RecruiterHomeState extends State<RecruiterHome> with RouteAware {
           borderRadius: BorderRadius.circular(20),
         ),
         child: const Center(
-          child: Text("No activity yet", style: TextStyle(color: Colors.white54)),
+          child: Text(
+            "No activity yet",
+            style: TextStyle(color: Colors.white54),
+          ),
         ),
       );
     }
@@ -363,8 +376,12 @@ class _RecruiterHomeState extends State<RecruiterHome> with RouteAware {
     List<FlSpot> jobs = [];
 
     for (int i = 0; i < chartData.length; i++) {
-      applicants.add(FlSpot(i.toDouble(), (chartData[i]['applicants'] ?? 0).toDouble()));
-      jobs.add(FlSpot(i.toDouble(), (chartData[i]['jobs'] ?? 0).toDouble()));
+      applicants.add(
+        FlSpot(i.toDouble(), (chartData[i]['applicants'] ?? 0).toDouble()),
+      );
+      jobs.add(
+        FlSpot(i.toDouble(), (chartData[i]['jobs'] ?? 0).toDouble()),
+      );
     }
 
     return Container(
@@ -389,13 +406,20 @@ class _RecruiterHomeState extends State<RecruiterHome> with RouteAware {
                 interval: 1,
                 getTitlesWidget: (value, meta) {
                   final index = value.toInt();
-                  if (index < 0 || index >= chartData.length) return const SizedBox();
+                  if (index < 0 || index >= chartData.length) {
+                    return const SizedBox();
+                  }
+
                   final label = chartData[index]['date']?.toString() ?? '';
+
                   return Padding(
-                    padding: const EdgeInsets.only(top: 6.0),
+                    padding: const EdgeInsets.only(top: 6),
                     child: Text(
-                      label.length >= 5 ? label.substring(label.length - 5) : label,
-                      style: const TextStyle(color: Colors.white54, fontSize: 10),
+                      label.length >= 5
+                          ? label.substring(label.length - 5)
+                          : label,
+                      style:
+                          const TextStyle(color: Colors.white54, fontSize: 10),
                     ),
                   );
                 },
@@ -423,53 +447,5 @@ class _RecruiterHomeState extends State<RecruiterHome> with RouteAware {
     );
   }
 
-  // ================= APPLICANTS =================
-  Widget _applicants() {
-    if (recentApplicants.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.all(20),
-        child: Text("No applicants yet", style: TextStyle(color: Colors.white54)),
-      );
-    }
 
-    return ListView.builder(
-      itemCount: recentApplicants.length,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemBuilder: (context, i) {
-        final item = recentApplicants[i];
-
-        return Container(
-          margin: const EdgeInsets.only(bottom: 10),
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: cardColor,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Row(
-            children: [
-              const CircleAvatar(
-                backgroundColor: Colors.grey,
-                child: Icon(Icons.person, color: Colors.white),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(item['full_name'], style: const TextStyle(color: Colors.white)),
-                    Text(item['status'], style: const TextStyle(color: Colors.white54)),
-                  ],
-                ),
-              ),
-              Text(
-                item['created_at'].toString().substring(0, 10),
-                style: const TextStyle(color: Colors.white38),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
 }

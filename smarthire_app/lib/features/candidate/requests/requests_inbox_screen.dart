@@ -3,9 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
-// Écran principal de la boîte de réception des demandes pour le candidat.
-// Il récupère les demandes depuis l'API, affiche des onglets de filtrage,
-// et permet d'accéder au détail d'une demande.
+import 'request_decision_screen.dart';
+
 class RequestsInboxScreen extends StatefulWidget {
   const RequestsInboxScreen({super.key});
 
@@ -14,30 +13,20 @@ class RequestsInboxScreen extends StatefulWidget {
 }
 
 class _RequestsInboxScreenState extends State<RequestsInboxScreen> {
-  // Couleurs de l'interface utilisées dans tout l'écran.
   static const Color primaryBlue = Color(0xFF1E6CFF);
   static const Color backgroundTop = Color(0xFF08162D);
   static const Color backgroundBottom = Color(0xFF050A12);
   static const Color cardColor = Color(0xFF121C31);
 
-  // URL de base pour les appels vers l'API backend.
   static const String baseUrl = 'http://192.168.100.47:5000/api';
+  static const String serverUrl = 'http://192.168.100.47:5000';
 
-  // Contrôleur pour le champ de recherche.
   final TextEditingController searchController = TextEditingController();
 
-  // Index de l'onglet sélectionné dans le filtre de demande.
   int selectedTabIndex = 0;
 
-  // Libellés des onglets de filtrage des demandes.
-  final List<String> tabs = [
-    "All",
-    "Pending",
-    "Approved",
-    "Rejected",
-  ];
+  final List<String> tabs = ["All", "Pending", "Approved", "Rejected"];
 
-  // Données des demandes reçues, état de chargement et message d'erreur.
   List<dynamic> requests = [];
   bool isLoading = true;
   String? errorMessage;
@@ -45,26 +34,85 @@ class _RequestsInboxScreenState extends State<RequestsInboxScreen> {
   @override
   void initState() {
     super.initState();
-    // Au démarrage de l'écran, lance la récupération des demandes.
     fetchRequests();
   }
 
   @override
   void dispose() {
-    // Libère le contrôleur de recherche lors de la destruction de l'écran.
     searchController.dispose();
     super.dispose();
   }
 
-  // Méthode asynchrone qui récupère les demandes reçues depuis le serveur.
+  String? fixImageUrl(dynamic value) {
+    if (value == null) return null;
+    final image = value.toString().trim();
+
+    if (image.isEmpty || image == "null" || image == "NULL") return null;
+    if (image.startsWith("http")) return image;
+    if (image.startsWith("/")) return "$serverUrl$image";
+
+    return "$serverUrl/$image";
+  }
+
+  String? getCompanyLogo(dynamic request) {
+    if (request == null) return null;
+
+    final keys = [
+      "company_logo",
+      "logo",
+      "logo_url",
+      "companyLogo",
+      "company_image",
+      "image",
+      "profile_image",
+      "profile_photo",
+      "photo",
+    ];
+
+    for (final key in keys) {
+      final logo = fixImageUrl(request[key]);
+      if (logo != null) return logo;
+    }
+
+    return null;
+  }
+
+  Widget companyLogoWidget(dynamic request, {double size = 58}) {
+    final logo = getCompanyLogo(request);
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        width: size,
+        height: size,
+        color: Colors.white.withOpacity(0.06),
+        child: logo == null
+            ? const Icon(
+                Icons.business_rounded,
+                color: Colors.white54,
+                size: 28,
+              )
+            : Image.network(
+                logo,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) {
+                  return const Icon(
+                    Icons.business_rounded,
+                    color: Colors.white54,
+                    size: 28,
+                  );
+                },
+              ),
+      ),
+    );
+  }
+
   Future<void> fetchRequests() async {
     try {
-      // Récupère le token stocké localement pour l'authentification.
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('token');
 
       if (token == null || token.isEmpty) {
-        // Si le token n'existe pas, on affiche une erreur et on quitte.
         setState(() {
           isLoading = false;
           errorMessage = "Token introuvable. Veuillez vous reconnecter.";
@@ -72,7 +120,6 @@ class _RequestsInboxScreenState extends State<RequestsInboxScreen> {
         return;
       }
 
-      // Envoie la requête GET à l'API pour obtenir les demandes reçues.
       final response = await http.get(
         Uri.parse('$baseUrl/requests/received'),
         headers: {
@@ -80,18 +127,15 @@ class _RequestsInboxScreenState extends State<RequestsInboxScreen> {
         },
       );
 
-      // Decode la réponse JSON pour récupérer le contenu.
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 200) {
-        // Si la réponse est bonne, met à jour la liste des demandes.
         setState(() {
           requests = data['requests'] ?? [];
           isLoading = false;
           errorMessage = null;
         });
       } else {
-        // Si le serveur renvoie une erreur, affiche le message correspondant.
         setState(() {
           isLoading = false;
           errorMessage =
@@ -99,7 +143,6 @@ class _RequestsInboxScreenState extends State<RequestsInboxScreen> {
         });
       }
     } catch (e) {
-      // En cas d'exception réseau ou JSON invalide, on affiche une erreur.
       setState(() {
         isLoading = false;
         errorMessage = "Erreur de connexion au serveur";
@@ -107,19 +150,6 @@ class _RequestsInboxScreenState extends State<RequestsInboxScreen> {
     }
   }
 
-  // Ouvre l'écran de détails de la demande puis recharge la liste au retour.
-  void openRequestDetails(Map<String, dynamic> request) {
-    Navigator.pushNamed(
-      context,
-      '/request-decision',
-      arguments: request,
-    ).then((_) {
-      // Recharge les demandes après la navigation retour.
-      fetchRequests();
-    });
-  }
-
-  // Retourne une couleur de badge en fonction du statut de la demande.
   Color getStatusColor(String status) {
     switch (status.toLowerCase()) {
       case 'approved':
@@ -134,45 +164,101 @@ class _RequestsInboxScreenState extends State<RequestsInboxScreen> {
 
   String formatDate(dynamic createdAt) {
     if (createdAt == null) return "Recently";
-    final raw = createdAt.toString();
-    if (raw.length >= 16) {
-      return raw.substring(0, 16).replaceFirst('T', ' ');
-    }
+    final raw = createdAt.toString().replaceFirst('T', ' ');
+    if (raw.length >= 16) return raw.substring(0, 16);
     return raw;
   }
 
-  // Liste filtrée des demandes selon la recherche et l'onglet sélectionné.
+  Map<String, dynamic> buildRequestArgs(dynamic request) {
+    final status = (request["status"] ?? "pending").toString();
+
+    final recruiterName =
+        request["full_name"]?.toString().trim().isNotEmpty == true
+            ? request["full_name"].toString()
+            : request["recruiter_name"]?.toString().trim().isNotEmpty == true
+                ? request["recruiter_name"].toString()
+                : "Recruiter";
+
+    final companyName =
+        request["company_name"]?.toString().trim().isNotEmpty == true
+            ? request["company_name"].toString()
+            : "Company";
+
+    return {
+      "id": request["id"],
+      "request_id": request["id"],
+      "recruiter_id": request["recruiter_id"],
+      "candidate_id": request["candidate_id"],
+      "recruiter_name": recruiterName,
+      "company": recruiterName,
+      "company_name": companyName,
+      "title": "Access Request",
+      "subtitle": "$companyName wants to access your profile.",
+      "description":
+          "$recruiterName from $companyName sent you an access request through SmartHire.",
+      "time": formatDate(request["created_at"]),
+      "created_at": request["created_at"]?.toString(),
+      "status": status,
+      "type": status.toUpperCase(),
+      "company_logo": getCompanyLogo(request),
+      "logo": getCompanyLogo(request),
+    };
+  }
+
+  void openRequestDetails(dynamic request) {
+    final args = buildRequestArgs(request);
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => RequestDecisionScreen(request: args),
+      ),
+    ).then((_) {
+      fetchRequests();
+    });
+  }
+
   List<dynamic> get filteredRequests {
-    // Partie de filtrage : on clone la liste complète pour éviter de modifier l'original.
     List<dynamic> result = List.from(requests);
 
-    // Applique le filtre de recherche textuelle si un terme est saisi.
     final query = searchController.text.trim().toLowerCase();
+
     if (query.isNotEmpty) {
       result = result.where((request) {
-        final recruiter =
-            "recruiter #${request['recruiter_id'] ?? ''}".toLowerCase();
-        final status = (request['status'] ?? '').toString().toLowerCase();
-        return recruiter.contains(query) || status.contains(query);
+        final recruiter = (request["full_name"] ?? "").toString().toLowerCase();
+        final company =
+            (request["company_name"] ?? "").toString().toLowerCase();
+        final status = (request["status"] ?? "").toString().toLowerCase();
+
+        return recruiter.contains(query) ||
+            company.contains(query) ||
+            status.contains(query);
       }).toList();
     }
 
-    // Applique le filtre par onglet selon l'index sélectionné.
     if (selectedTabIndex == 1) {
       result = result
-          .where((request) =>
-              (request['status'] ?? 'pending').toString().toLowerCase() ==
-              'pending')
+          .where(
+            (request) =>
+                (request["status"] ?? "pending").toString().toLowerCase() ==
+                "pending",
+          )
           .toList();
     } else if (selectedTabIndex == 2) {
       result = result
-          .where((request) =>
-              (request['status'] ?? '').toString().toLowerCase() == 'approved')
+          .where(
+            (request) =>
+                (request["status"] ?? "").toString().toLowerCase() ==
+                "approved",
+          )
           .toList();
     } else if (selectedTabIndex == 3) {
       result = result
-          .where((request) =>
-              (request['status'] ?? '').toString().toLowerCase() == 'rejected')
+          .where(
+            (request) =>
+                (request["status"] ?? "").toString().toLowerCase() ==
+                "rejected",
+          )
           .toList();
     }
 
@@ -181,7 +267,6 @@ class _RequestsInboxScreenState extends State<RequestsInboxScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Construction du Scaffold principal de l'écran, contenant le corps et la navigation.
     return Scaffold(
       backgroundColor: backgroundBottom,
       extendBody: true,
@@ -195,26 +280,20 @@ class _RequestsInboxScreenState extends State<RequestsInboxScreen> {
           ),
         ),
         child: SafeArea(
-          child: Column(
-            children: [
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(18, 16, 18, 110),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildTopBar(),
-                      const SizedBox(height: 20),
-                      _buildSearchBar(),
-                      const SizedBox(height: 18),
-                      _buildTabs(),
-                      const SizedBox(height: 18),
-                      _buildBodyContent(),
-                    ],
-                  ),
-                ),
-              ),
-            ],
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(18, 16, 18, 110),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildTopBar(),
+                const SizedBox(height: 20),
+                _buildSearchBar(),
+                const SizedBox(height: 18),
+                _buildTabs(),
+                const SizedBox(height: 18),
+                _buildBodyContent(),
+              ],
+            ),
           ),
         ),
       ),
@@ -222,19 +301,17 @@ class _RequestsInboxScreenState extends State<RequestsInboxScreen> {
     );
   }
 
-  // Gère le contenu principal de l'écran : état de chargement, erreur, vide ou liste.
   Widget _buildBodyContent() {
     if (isLoading) {
       return const Center(
         child: Padding(
           padding: EdgeInsets.only(top: 40),
-          child: CircularProgressIndicator(),
+          child: CircularProgressIndicator(color: primaryBlue),
         ),
       );
     }
 
     if (errorMessage != null) {
-      // Affiche une carte d'erreur avec un bouton de réessai.
       return Container(
         width: double.infinity,
         padding: const EdgeInsets.all(24),
@@ -270,38 +347,33 @@ class _RequestsInboxScreenState extends State<RequestsInboxScreen> {
     }
 
     if (filteredRequests.isEmpty) {
-      // Si aucun résultat ne correspond aux filtres, affiche un état vide.
       return _buildEmptyState();
     }
 
-    // Affiche la liste des demandes filtrées.
     return Column(
       children: filteredRequests.map((request) {
         final status = (request["status"] ?? "pending").toString();
         final badgeColor = getStatusColor(status);
 
-        // Prépare une version du request enrichie avec les champs nécessaires
-        // pour l'affichage de la carte et la navigation vers le détail.
-        final Map<String, dynamic> mappedRequest = {
-          ...request as Map<String, dynamic>,
-         "company": "Recruiter #${request["recruiter_id"] ?? ""}",
-         "title": "Access Request",
-         "subtitle": "A recruiter wants access to your profile.",
-         "time": formatDate(request["created_at"]),
-         "isUnread": status.toLowerCase() == "pending",
-         "type": status.toUpperCase(),
-         "color": badgeColor,
-       };
+        final recruiterName =
+            request["full_name"]?.toString().trim().isNotEmpty == true
+                ? request["full_name"].toString()
+                : "Recruiter";
+
+        final companyName =
+            request["company_name"]?.toString().trim().isNotEmpty == true
+                ? request["company_name"].toString()
+                : "Company";
 
         return Padding(
           padding: const EdgeInsets.only(bottom: 14),
           child: GestureDetector(
-            onTap: () => openRequestDetails(mappedRequest),
+            onTap: () => openRequestDetails(request),
             child: Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: cardColor,
-                borderRadius: BorderRadius.circular(22),
+                borderRadius: BorderRadius.circular(24),
                 border: Border.all(color: Colors.white.withOpacity(0.04)),
               ),
               child: Row(
@@ -309,18 +381,7 @@ class _RequestsInboxScreenState extends State<RequestsInboxScreen> {
                 children: [
                   Stack(
                     children: [
-                      Container(
-                        width: 58,
-                        height: 58,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.06),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: const Icon(
-                          Icons.business_rounded,
-                          color: Colors.white54,
-                        ),
-                      ),
+                      companyLogoWidget(request, size: 58),
                       if (status.toLowerCase() == "pending")
                         Positioned(
                           top: 0,
@@ -342,52 +403,52 @@ class _RequestsInboxScreenState extends State<RequestsInboxScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          mappedRequest["company"] ?? "",
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.55),
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          mappedRequest["title"] ?? "",
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                          recruiterName,
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 17,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
-                        const SizedBox(height: 6),
+                        const SizedBox(height: 3),
                         Text(
-                          mappedRequest["subtitle"] ?? "",
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
+                          companyName,
                           style: TextStyle(
                             color: Colors.white.withOpacity(0.55),
                             fontSize: 14,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        const Text(
+                          "Access Request",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          "A recruiter wants to access your profile.",
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.55),
+                            fontSize: 15,
                             height: 1.5,
                           ),
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 16),
                         Row(
                           children: [
                             _buildTypeBadge(
-                              text: mappedRequest["type"] ?? "",
-                              color: mappedRequest["color"] ?? primaryBlue,
+                              text: status.toUpperCase(),
+                              color: badgeColor,
                             ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                mappedRequest["time"] ?? "",
-                                style: TextStyle(
-                                  color: Colors.white.withOpacity(0.42),
-                                  fontSize: 13,
-                                ),
+                            const Spacer(),
+                            Text(
+                              formatDate(request["created_at"]),
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.4),
+                                fontSize: 13,
                               ),
                             ),
                           ],
@@ -395,11 +456,11 @@ class _RequestsInboxScreenState extends State<RequestsInboxScreen> {
                       ],
                     ),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 8),
                   Icon(
-                    Icons.arrow_forward_ios_rounded,
+                    Icons.chevron_right_rounded,
                     color: Colors.white.withOpacity(0.35),
-                    size: 16,
+                    size: 28,
                   ),
                 ],
               ),
@@ -410,7 +471,6 @@ class _RequestsInboxScreenState extends State<RequestsInboxScreen> {
     );
   }
 
-  // Barre supérieure de l'écran avec icônes et titre central.
   Widget _buildTopBar() {
     return Row(
       children: [
@@ -436,39 +496,22 @@ class _RequestsInboxScreenState extends State<RequestsInboxScreen> {
           ),
         ),
         const Spacer(),
-        Stack(
-          children: [
-            Container(
-              width: 50,
-              height: 50,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white.withOpacity(0.06),
-              ),
-              child: const Icon(
-                Icons.notifications_none_rounded,
-                color: Colors.white,
-              ),
-            ),
-            Positioned(
-              top: 10,
-              right: 10,
-              child: Container(
-                width: 8,
-                height: 8,
-                decoration: const BoxDecoration(
-                  color: Colors.redAccent,
-                  shape: BoxShape.circle,
-                ),
-              ),
-            ),
-          ],
+        Container(
+          width: 50,
+          height: 50,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.white.withOpacity(0.06),
+          ),
+          child: const Icon(
+            Icons.notifications_none_rounded,
+            color: Colors.white,
+          ),
         ),
       ],
     );
   }
 
-  // Barre de recherche textuelle pour filtrer les demandes.
   Widget _buildSearchBar() {
     return Container(
       height: 58,
@@ -498,7 +541,6 @@ class _RequestsInboxScreenState extends State<RequestsInboxScreen> {
     );
   }
 
-  // Liste d'onglets horizontaux pour filtrer par statut de demande.
   Widget _buildTabs() {
     return SizedBox(
       height: 36,
@@ -547,7 +589,6 @@ class _RequestsInboxScreenState extends State<RequestsInboxScreen> {
     );
   }
 
-  // Badge de statut affiché sur chaque demande.
   Widget _buildTypeBadge({
     required String text,
     required Color color,
@@ -570,7 +611,6 @@ class _RequestsInboxScreenState extends State<RequestsInboxScreen> {
     );
   }
 
-  // Affiche un état vide lorsque aucune demande n'est disponible.
   Widget _buildEmptyState() {
     return Container(
       width: double.infinity,
@@ -601,7 +641,6 @@ class _RequestsInboxScreenState extends State<RequestsInboxScreen> {
     );
   }
 
-  // Barre de navigation inférieure avec accès aux principaux écrans candidat.
   Widget _buildBottomNav() {
     return Container(
       color: backgroundBottom,

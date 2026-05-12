@@ -1,43 +1,32 @@
 const express = require("express");
 const router = express.Router();
-const upload = require("../config/upload"); // 🔥 هنا نستعمل config تاعك
 
-// ==============================
-// UPLOAD LOGO
-// ==============================
-router.post("/logo", upload.single("image"), (req, res) => {
-  res.status(200).json({
-    logo: "uploads/" + req.file.filename
-  });
-});
+const upload = require("../config/upload");
+const { protect } = require("../middleware/authMiddleware");
 
+router.post(
+  "/profile",
+  protect,
+  upload.single("image"),
+  (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({
+          message: "No image uploaded",
+        });
+      }
 
-// ==============================
-// UPLOAD COVER
-// ==============================
-router.post("/cover", upload.single("image"), (req, res) => {
-  res.status(200).json({
-    cover: "uploads/" + req.file.filename
-  });
-});
-
-// ==============================
-// UPLOAD PROFILE PHOTO 🔥
-// ==============================
-router.post("/profile", upload.single("image"), (req, res) => {
-  res.status(200).json({
-    profile_photo: "uploads/" + req.file.filename
-  });
-});
-
-
-// ==============================
-// UPLOAD CV
-// ==============================
-router.post("/cv", upload.single("file"), (req, res) => {
-  res.status(200).json({
-    cv: "uploads/" + req.file.filename
-  });
-});
+      res.status(200).json({
+        message: "Image uploaded successfully",
+        profile_photo: req.file.path,
+      });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({
+        message: "Erreur serveur",
+      });
+    }
+  }
+);
 
 module.exports = router;

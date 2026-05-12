@@ -24,7 +24,7 @@ router.post("/conversation", protect, async (req, res) => {
 
     if (existing.length > 0) {
       return res.status(200).json({
-        conversation: existing[0]
+        conversation: existing[0],
       });
     }
 
@@ -33,12 +33,12 @@ router.post("/conversation", protect, async (req, res) => {
       [currentUser, user_id]
     );
 
-    const candidate = users.find(u => u.role === "candidate");
-    const recruiter = users.find(u => u.role === "recruiter");
+    const candidate = users.find((u) => u.role === "candidate");
+    const recruiter = users.find((u) => u.role === "recruiter");
 
     if (!candidate || !recruiter) {
       return res.status(400).json({
-        message: "Conversation invalide"
+        message: "Conversation invalide",
       });
     }
 
@@ -52,14 +52,13 @@ router.post("/conversation", protect, async (req, res) => {
 
     res.status(201).json({
       message: "Conversation créée",
-      conversationId: result.insertId
+      conversationId: result.insertId,
     });
-
   } catch (err) {
     console.error(err);
     res.status(500).json({
       message: "Erreur serveur",
-      error: err.message
+      error: err.message,
     });
   }
 });
@@ -75,42 +74,64 @@ router.get("/conversations", protect, async (req, res) => {
       `
       SELECT
         conversations.*,
-        u.full_name AS other_user_name,
-        cp.name AS company_name,
+
+        otherUser.full_name AS other_user_name,
+        otherUser.role AS other_user_role,
+
+        candidateProfile.profile_photo AS candidate_photo,
+
+        companyProfile.name AS company_name,
+        companyProfile.logo AS company_logo,
+
         COALESCE(unread.unread_count, 0) AS unread_count
+
       FROM conversations
-      JOIN users u
-        ON u.id = IF(conversations.candidate_id = ?, conversations.recruiter_id, conversations.candidate_id)
-      LEFT JOIN company_profiles cp
-        ON cp.user_id = IF(conversations.candidate_id = ?, conversations.recruiter_id, conversations.candidate_id)
+
+      JOIN users otherUser
+        ON otherUser.id = IF(
+          conversations.candidate_id = ?,
+          conversations.recruiter_id,
+          conversations.candidate_id
+        )
+
+      LEFT JOIN candidate_profiles candidateProfile
+        ON candidateProfile.user_id = conversations.candidate_id
+
+      LEFT JOIN company_profiles companyProfile
+        ON companyProfile.user_id = conversations.recruiter_id
+
       LEFT JOIN (
         SELECT conversation_id, COUNT(*) AS unread_count
         FROM messages
-        WHERE sender_id != ?
+        WHERE receiver_id = ?
+        AND is_read = 0
         GROUP BY conversation_id
-      ) unread ON unread.conversation_id = conversations.id
-      WHERE conversations.candidate_id = ? OR conversations.recruiter_id = ?
+      ) unread 
+        ON unread.conversation_id = conversations.id
+
+      WHERE conversations.candidate_id = ?
+         OR conversations.recruiter_id = ?
+
       ORDER BY conversations.created_at DESC
       `,
-      [userId, userId, userId, userId, userId]
+      [userId, userId, userId, userId]
     );
 
     res.status(200).json({
       count: rows.length,
-      conversations: rows
+      conversations: rows,
     });
-
   } catch (err) {
     console.error(err);
     res.status(500).json({
       message: "Erreur serveur",
-      error: err.message
+      error: err.message,
     });
   }
 });
 
 // ==============================
-// SEND MESSAGE (REALTIME 🔥)
+// SEND MESSAGE REALTIME
 // ==============================
 router.post("/", protect, async (req, res) => {
   try {
@@ -126,21 +147,26 @@ router.post("/", protect, async (req, res) => {
 
     if (conv.length === 0) {
       return res.status(403).json({
-        message: "Accès refusé"
+        message: "Accès refusé",
       });
     }
 
+    const receiverId =
+      conv[0].candidate_id === req.user.id
+        ? conv[0].recruiter_id
+        : conv[0].candidate_id;
+
     const [result] = await db.query(
       `
-      INSERT INTO messages (conversation_id, sender_id, message)
-      VALUES (?, ?, ?)
+      INSERT INTO messages 
+        (conversation_id, sender_id, receiver_id, message, is_read)
+      VALUES (?, ?, ?, ?, 0)
       `,
-      [conversation_id, req.user.id, message]
+      [conversation_id, req.user.id, receiverId, message]
     );
 
     const createdAt = new Date();
 
-    // 🔥 SOCKET REALTIME
     const io = req.app.get("io");
 
     if (io) {
@@ -148,7 +174,9 @@ router.post("/", protect, async (req, res) => {
         id: result.insertId,
         conversation_id,
         sender_id: req.user.id,
+        receiver_id: receiverId,
         message,
+        is_read: 0,
         created_at: createdAt.toISOString(),
       });
     }
@@ -156,17 +184,64 @@ router.post("/", protect, async (req, res) => {
     res.status(201).json({
       message: "Message envoyé",
       messageId: result.insertId,
+      receiver_id: receiverId,
+      is_read: 0,
       created_at: createdAt.toISOString(),
     });
-
   } catch (err) {
-  console.error("ERROR SEND MESSAGE:", err);
+    console.error("ERROR SEND MESSAGE:", err);
 
-  res.status(500).json({
-    message: "Erreur serveur",
-    error: err.message
-  });
-}
+    res.status(500).json({
+      message: "Erreur serveur",
+      error: err.message,
+    });
+  }
+});
+
+// ==============================
+// MARK CONVERSATION AS READ
+// ==============================
+router.put("/:conversationId/read", protect, async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+
+    const [conv] = await db.query(
+      `
+      SELECT * FROM conversations
+      WHERE id = ? AND (candidate_id = ? OR recruiter_id = ?)
+      `,
+      [conversationId, req.user.id, req.user.id]
+    );
+
+    if (conv.length === 0) {
+      return res.status(403).json({
+        message: "Accès refusé",
+      });
+    }
+
+    const [result] = await db.query(
+      `
+      UPDATE messages
+      SET is_read = 1
+      WHERE conversation_id = ?
+      AND receiver_id = ?
+      AND is_read = 0
+      `,
+      [conversationId, req.user.id]
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Messages marked as read",
+      affectedRows: result.affectedRows,
+    });
+  } catch (error) {
+    console.error("ERROR MARK AS READ:", error);
+    res.status(500).json({
+      message: "Server error",
+      error: error.message,
+    });
+  }
 });
 
 // ==============================
@@ -186,16 +261,15 @@ router.delete("/:messageId", protect, async (req, res) => {
     }
 
     const message = rows[0];
+
     if (message.sender_id !== req.user.id) {
       return res.status(403).json({ message: "Action interdite" });
     }
 
-    await db.query(
-      `DELETE FROM messages WHERE id = ?`,
-      [messageId]
-    );
+    await db.query(`DELETE FROM messages WHERE id = ?`, [messageId]);
 
     const io = req.app.get("io");
+
     if (io) {
       io.to(message.conversation_id).emit("deleteMessage", {
         id: Number(messageId),
@@ -205,7 +279,10 @@ router.delete("/:messageId", protect, async (req, res) => {
     res.status(200).json({ message: "Message supprimé" });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ message: "Erreur serveur", error: err.message });
+    res.status(500).json({
+      message: "Erreur serveur",
+      error: err.message,
+    });
   }
 });
 
@@ -226,7 +303,7 @@ router.get("/:conversationId", protect, async (req, res) => {
 
     if (conv.length === 0) {
       return res.status(403).json({
-        message: "Accès refusé"
+        message: "Accès refusé",
       });
     }
 
@@ -245,13 +322,13 @@ router.get("/:conversationId", protect, async (req, res) => {
 
     res.status(200).json({
       count: rows.length,
-      messages: rows
+      messages: rows,
     });
-
   } catch (err) {
     console.error(err);
     res.status(500).json({
-      message: "Erreur serveur"
+      message: "Erreur serveur",
+      error: err.message,
     });
   }
 });

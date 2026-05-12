@@ -301,7 +301,12 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
                       const SizedBox(height: 24),
                       _buildSectionTitle("About this role"),
                       const SizedBox(height: 12),
-                      _buildAboutRoleCard(),
+                      _buildAboutRoleCard(
+                        experience: job?["experience"]?.toString() ?? "-",
+                       education: job?["education"] ?? "-",
+                       languages: job?["languages"] ?? "-",
+                       team: job?["team"] ?? "-",
+                      ),
                       const SizedBox(height: 30),
                     ],
                   ),
@@ -424,13 +429,26 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
             ),
           ),
           const SizedBox(height: 8),
-          Text(
-            "$company • $location",
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.55),
-              fontSize: 15,
-              fontWeight: FontWeight.w500,
+          GestureDetector(
+
+           onTap: () {
+
+             Navigator.pushNamed(
+               context,
+               '/candidate-company-profile',
+               arguments: job?["company_id"] ?? 0,
+              );
+
+            },
+ 
+           child: Text(
+             "$company • $location",
+              textAlign: TextAlign.center,
+              style: TextStyle(
+               color: Colors.white.withOpacity(0.55),
+               fontSize: 15,
+               fontWeight: FontWeight.w500,
+              ),
             ),
           ),
           const SizedBox(height: 18),
@@ -594,44 +612,57 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
   /// ==============================
   /// Carte informations supplémentaires
   /// ==============================
-  Widget _buildAboutRoleCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: Colors.white.withOpacity(0.04)),
-      ),
-      child: Column(
-        children: [
-          _buildRoleInfoRow(
-            icon: Icons.calendar_today_outlined,
-            label: "Experience",
-            value: "2+ years",
-          ),
-          const SizedBox(height: 16),
-          _buildRoleInfoRow(
-            icon: Icons.school_outlined,
-            label: "Education",
-            value: "Relevant degree",
-          ),
-          const SizedBox(height: 16),
-          _buildRoleInfoRow(
-            icon: Icons.language_rounded,
-            label: "Languages",
-            value: "French / English",
-          ),
-          const SizedBox(height: 16),
-          _buildRoleInfoRow(
-            icon: Icons.people_outline_rounded,
-            label: "Team",
-            value: "Product / Design",
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _buildAboutRoleCard({
+  required String experience,
+  required String education,
+  required String languages,
+  required String team,
+}) {
+  return Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(18),
+    decoration: BoxDecoration(
+      color: cardColor,
+      borderRadius: BorderRadius.circular(22),
+      border: Border.all(color: Colors.white.withOpacity(0.04)),
+    ),
+    child: Column(
+      children: [
+
+        _buildRoleInfoRow(
+          icon: Icons.calendar_today_outlined,
+          label: "Experience",
+          value: experience,
+        ),
+
+        const SizedBox(height: 16),
+
+        _buildRoleInfoRow(
+          icon: Icons.school_outlined,
+          label: "Education",
+          value: education,
+        ),
+
+        const SizedBox(height: 16),
+
+        _buildRoleInfoRow(
+          icon: Icons.language_rounded,
+          label: "Languages",
+          value: languages,
+        ),
+
+        const SizedBox(height: 16),
+
+        _buildRoleInfoRow(
+          icon: Icons.people_outline_rounded,
+          label: "Team",
+          value: team,
+        ),
+      ],
+    ),
+  );
+} 
+    
 
   /// ==============================
   /// Ligne d'information

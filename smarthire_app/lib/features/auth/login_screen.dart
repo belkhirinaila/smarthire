@@ -2,8 +2,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
-// Écran de connexion principal de l'application.
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -12,34 +12,63 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  // Couleur principale utilisée dans l'interface de connexion.
   static const Color primaryBlue = Color(0xFF1E6CFF);
-
-  /// ==============================
-  /// Base URL API
-  /// ==============================
   static const String baseUrl = 'http://192.168.100.47:5000/api';
 
   bool _obscure = true;
   bool isLoading = false;
+  bool isGoogleLoading = false;
 
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
 
+  final GoogleSignIn _googleSignIn = GoogleSignIn(
+    scopes: ['email', 'profile'],
+  );
+
   @override
-  // Libération des contrôleurs lorsque le widget est supprimé.
   void dispose() {
     emailController.dispose();
     passwordController.dispose();
     super.dispose();
   }
 
-  // Méthode d'authentification qui valide les champs, appelle l'API et gère la navigation.
+  Future<void> saveAndNavigate(Map<String, dynamic> data) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    final String? token = data['token'];
+    final String? role = data['user']?['role'];
+    final dynamic userId = data['user']?['id'];
+
+    if (token != null && token.isNotEmpty) {
+      await prefs.setString('token', token);
+    }
+
+    if (role != null) {
+      await prefs.setString('role', role);
+    }
+
+    if (userId != null) {
+      await prefs.setString('user_id', userId.toString());
+    }
+
+    if (!mounted) return;
+
+    if (role == "candidate") {
+      Navigator.pushReplacementNamed(context, '/candidate');
+    } else if (role == "company" || role == "recruiter") {
+      Navigator.pushReplacementNamed(context, '/recruiter');
+    } else if (role == "admin") {
+      Navigator.pushReplacementNamed(context, '/admin');
+    } else {
+      Navigator.pushReplacementNamed(context, '/home');
+    }
+  }
+
   Future<void> loginUser() async {
     final email = emailController.text.trim();
     final password = passwordController.text.trim();
 
-    // Vérification que l'utilisateur a bien renseigné les deux champs.
     if (email.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Remplis tous les champs")),
@@ -47,9 +76,7 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    setState(() {
-      isLoading = true;
-    });
+    setState(() => isLoading = true);
 
     try {
       final response = await http.post(
@@ -65,45 +92,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (!mounted) return;
 
-      setState(() {
-        isLoading = false;
-      });
+      setState(() => isLoading = false);
 
       if (response.statusCode == 200) {
-        /// ==============================
-        /// Sauvegarde du token + infos user
-        /// ==============================
-        final prefs = await SharedPreferences.getInstance();
-
-        final String? token = data['token'];
-        final String? role = data['user']?['role'];
-        final dynamic userId = data['user']?['id'];
-
-        if (token != null && token.isNotEmpty) {
-          await prefs.setString('token', token);
-        }
-
-        if (role != null) {
-          await prefs.setString('role', role);
-        }
-
-        if (userId != null) {
-          await prefs.setString('user_id', userId.toString());
-        }
-
-        /// Debug temporaire
-        debugPrint("TOKEN SAVED: ${prefs.getString('token')}");
-        debugPrint("ROLE SAVED: ${prefs.getString('role')}");
-
-        if (role == "candidate") {
-          Navigator.pushReplacementNamed(context, '/candidate');
-        } else if (role == "company" || role == "recruiter") {
-          Navigator.pushReplacementNamed(context, '/recruiter');
-        } else if (role == "admin") {
-          Navigator.pushReplacementNamed(context, '/admin');
-        } else {
-          Navigator.pushReplacementNamed(context, '/home');
-        }
+        await saveAndNavigate(data);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(data['message'] ?? 'Erreur login')),
@@ -112,19 +104,66 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       if (!mounted) return;
 
-      setState(() {
-        isLoading = false;
-      });
+      setState(() => isLoading = false);
 
-      debugPrint("catch error: $e");
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Erreur serveur: $e")),
       );
     }
   }
 
+  Future<void> loginWithGoogle() async {
+    try {
+      setState(() => isGoogleLoading = true);
+
+      await _googleSignIn.signOut();
+
+      final GoogleSignInAccount? account = await _googleSignIn.signIn();
+
+      if (account == null) {
+        setState(() => isGoogleLoading = false);
+        return;
+      }
+
+      final GoogleSignInAuthentication auth = await account.authentication;
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/auth/google'),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({
+          "email": account.email,
+          "full_name": account.displayName ?? "",
+          "profile_photo": account.photoUrl ?? "",
+          "google_id": account.id,
+          "id_token": auth.idToken,
+        }),
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (!mounted) return;
+
+      setState(() => isGoogleLoading = false);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        await saveAndNavigate(data);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(data['message'] ?? "Google login failed")),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() => isGoogleLoading = false);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Google error: $e")),
+      );
+    }
+  }
+
   @override
-  // Construction de l'interface utilisateur de l'écran de connexion.
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
@@ -144,7 +183,6 @@ class _LoginScreenState extends State<LoginScreen> {
               children: [
                 const SizedBox(height: 20),
 
-                // En-tête avec logo et nom de l'application.
                 Row(
                   children: [
                     Container(
@@ -242,7 +280,8 @@ class _LoginScreenState extends State<LoginScreen> {
                         suffix: _obscure
                             ? Icons.visibility_off_rounded
                             : Icons.visibility_rounded,
-                        onSuffixTap: () => setState(() => _obscure = !_obscure),
+                        onSuffixTap: () =>
+                            setState(() => _obscure = !_obscure),
                         obscure: _obscure,
                       ),
 
@@ -288,9 +327,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                     strokeWidth: 2.5,
                                   ),
                                 )
-                              : Row(
+                              : const Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
-                                  children: const [
+                                  children: [
                                     Text(
                                       "Sign In",
                                       style: TextStyle(
@@ -334,22 +373,14 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 const SizedBox(height: 18),
 
-                Row(
-                  children: const [
-                    Expanded(
-                      child: _SocialButton(
-                        label: "Google",
-                        icon: Icons.g_mobiledata,
-                      ),
-                    ),
-                    SizedBox(width: 14),
-                    Expanded(
-                      child: _SocialButton(
-                        label: "LinkedIn",
-                        icon: Icons.work,
-                      ),
-                    ),
-                  ],
+                SizedBox(
+                  width: double.infinity,
+                  child: _SocialButton(
+                    label: "Continue with Google",
+                    icon: Icons.g_mobiledata,
+                    isLoading: isGoogleLoading,
+                    onTap: isGoogleLoading ? null : loginWithGoogle,
+                  ),
                 ),
 
                 const SizedBox(height: 38),
@@ -385,7 +416,6 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 }
 
-// Widget réutilisable pour un champ de saisie personnalisé.
 class _Input extends StatelessWidget {
   final String hint;
   final IconData prefix;
@@ -440,38 +470,65 @@ class _Input extends StatelessWidget {
   }
 }
 
-// Bouton générique pour les options de connexion sociales.
 class _SocialButton extends StatelessWidget {
   final String label;
   final IconData icon;
+  final VoidCallback? onTap;
+  final bool isLoading;
 
   const _SocialButton({
     required this.label,
     required this.icon,
+    required this.onTap,
+    this.isLoading = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 56,
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.06),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, color: Colors.white.withOpacity(0.8)),
-          const SizedBox(width: 10),
-          Text(
-            label,
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w700,
-            ),
+        child: Container(
+          width: double.infinity,
+          height: 56,
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.06),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: Colors.white.withOpacity(0.08)),
           ),
-        ],
+          child: Center(
+            child: isLoading
+                ? const SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2.3,
+                    ),
+                  )
+                : Row(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        icon,
+                        color: Colors.white.withOpacity(0.8),
+                        size: 32,
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        label,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
+        ),
       ),
     );
   }

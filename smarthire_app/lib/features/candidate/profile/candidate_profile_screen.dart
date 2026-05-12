@@ -1,20 +1,12 @@
 // Import des bibliothèques nécessaires :
-// - dart:convert pour la sérialisation et désérialisation JSON.
-// - flutter/material.dart pour construire l'interface utilisateur.
-// - package:http pour les requêtes HTTP vers le backend.
-// - shared_preferences pour récupérer le token d'authentification local.
-// - dart:io pour manipuler les fichiers sélectionnés sur l'appareil.
-// - image_picker pour ouvrir la galerie et sélectionner une photo.
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-// Écran de profil candidat qui affiche les informations du profil,
-// gère la visibilité et permet de mettre à jour la photo de profil.
 class CandidateProfileScreen extends StatefulWidget {
   const CandidateProfileScreen({super.key});
 
@@ -23,65 +15,44 @@ class CandidateProfileScreen extends StatefulWidget {
 }
 
 class _CandidateProfileScreenState extends State<CandidateProfileScreen> {
-  // Couleurs réutilisées dans l'affichage du profil.
   static const Color primaryBlue = Color(0xFF1E6CFF);
   static const Color backgroundTop = Color(0xFF08162D);
   static const Color backgroundBottom = Color(0xFF050A12);
   static const Color cardColor = Color(0xFF121C31);
   static const Color cardBorderColor = Color(0x0AFFFFFF);
-  static const TextStyle sectionTitleTextStyle = TextStyle(
-    color: Colors.white,
-    fontSize: 18,
-    fontWeight: FontWeight.w800,
-  );
-  static const TextStyle cardBodyTextStyle = TextStyle(
-    color: Colors.white70,
-    fontSize: 15,
-    height: 1.7,
-  );
-  static const TextStyle actionButtonLabelStyle = TextStyle(
-    color: Colors.white,
-    fontSize: 14,
-    fontWeight: FontWeight.w700,
-    height: 1.3,
-  );
 
-  // URL de base de l'API pour toutes les requêtes de ce screen.
   static const String baseUrl = 'http://192.168.100.47:5000/api';
+  static const String serverUrl = 'http://192.168.100.47:5000';
 
-  // Données du profil récupérées depuis le backend.
   Map<String, dynamic>? profile;
-  // Indicateur de chargement pendant la récupération des données.
   bool isLoading = true;
-  // Message d'erreur à afficher si la récupération échoue.
   String? errorMessage;
-  // Visibilité du profil (public/private/selective).
   String visibility = 'public';
-  // Nom dynamique affiché dans l'en-tête.
   String dynamicUserName = "";
-  // Image sélectionnée localement avant envoi au backend.
   File? selectedImage;
+
+  String getImageUrl(dynamic path) {
+    if (path == null) return "";
+    final p = path.toString().trim();
+    if (p.isEmpty) return "";
+    if (p.startsWith("http")) return p;
+    return "$serverUrl/$p";
+  }
 
   @override
   void initState() {
     super.initState();
-    // Au lancement de l'écran, on charge toutes les données nécessaires en
-    // une seule opération optimisée.
     loadData();
   }
 
-  // Charge le profil, la visibilité et le nom dynamique en parallèle.
   Future<void> loadData() async {
     try {
-      setState(() {
-        isLoading = true;
-      });
+      setState(() => isLoading = true);
 
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('token');
 
       if (token == null || token.isEmpty) {
-        if (!mounted) return;
         setState(() {
           isLoading = false;
           errorMessage = "Token introuvable. Veuillez vous reconnecter.";
@@ -90,34 +61,18 @@ class _CandidateProfileScreenState extends State<CandidateProfileScreen> {
       }
 
       final responses = await Future.wait([
-        http.get(
-          Uri.parse('$baseUrl/candidate-profile/me'),
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer $token',
-          },
-        ),
-        http.get(
-          Uri.parse('$baseUrl/visibility/me'),
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer $token',
-          },
-        ),
-        http.get(
-          Uri.parse('$baseUrl/auth/me'),
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer $token',
-          },
-        ),
+        http.get(Uri.parse('$baseUrl/candidate-profile/me'),
+            headers: {'Authorization': 'Bearer $token'}),
+        http.get(Uri.parse('$baseUrl/visibility/me'),
+            headers: {'Authorization': 'Bearer $token'}),
+        http.get(Uri.parse('$baseUrl/auth/me'),
+            headers: {'Authorization': 'Bearer $token'}),
       ]);
 
       final profileResponse = responses[0];
       final visibilityResponse = responses[1];
       final authResponse = responses[2];
 
-      final profileData = jsonDecode(profileResponse.body);
       String fetchedVisibility = 'public';
       String fetchedName = '';
 
@@ -133,9 +88,9 @@ class _CandidateProfileScreenState extends State<CandidateProfileScreen> {
         fetchedName = authData['user']?['full_name'] ?? "";
       }
 
-      if (!mounted) return;
-
       if (profileResponse.statusCode == 200) {
+        final profileData = jsonDecode(profileResponse.body);
+
         setState(() {
           profile = profileData['profile'];
           visibility = fetchedVisibility;
@@ -144,6 +99,7 @@ class _CandidateProfileScreenState extends State<CandidateProfileScreen> {
           errorMessage = null;
         });
       } else {
+        final profileData = jsonDecode(profileResponse.body);
         setState(() {
           isLoading = false;
           errorMessage =
@@ -151,7 +107,6 @@ class _CandidateProfileScreenState extends State<CandidateProfileScreen> {
         });
       }
     } catch (e) {
-      if (!mounted) return;
       setState(() {
         isLoading = false;
         errorMessage = 'Erreur de connexion au serveur';
@@ -163,74 +118,93 @@ class _CandidateProfileScreenState extends State<CandidateProfileScreen> {
     await loadData();
   }
 
-  // Ouvre la galerie et permet à l'utilisateur de sélectionner une photo.
   Future<void> pickImage() async {
     final picker = ImagePicker();
-
-    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+    final pickedFile = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 75,
+    );
 
     if (pickedFile != null) {
       setState(() {
         selectedImage = File(pickedFile.path);
       });
 
-      // Après sélection, on lance l'upload vers le serveur.
       await uploadImage();
     }
   }
 
-  // Envoie une requête multipart vers l'API pour téléverser l'image sélectionnée.
   Future<void> uploadImage() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('token');
 
     if (selectedImage == null || token == null) return;
 
-    var request = http.MultipartRequest(
+    final request = http.MultipartRequest(
       'POST',
-      Uri.parse('http://192.168.100.47:5000/api/upload/profile'),
+      Uri.parse('$serverUrl/api/upload/profile'),
     );
 
     request.headers['Authorization'] = 'Bearer $token';
 
     request.files.add(
-      await http.MultipartFile.fromPath('image', selectedImage!.path),
+      await http.MultipartFile.fromPath(
+        'image',
+        selectedImage!.path,
+      ),
     );
-    debugPrint("UPLOAD START");
-    var response = await request.send();
 
-    var resBody = await response.stream.bytesToString();
-    final data = jsonDecode(resBody);
+    final response = await request.send();
+    final resBody = await response.stream.bytesToString();
+
+    debugPrint("UPLOAD STATUS: ${response.statusCode}");
+    debugPrint("UPLOAD BODY: $resBody");
 
     if (response.statusCode == 200) {
-      String path = data['profile_photo'];
+      final data = jsonDecode(resBody);
+      final String path = data['profile_photo'];
 
-      // Sauvegarde le chemin de la photo sur le profil et recharge les données.
       await savePhotoToProfile(path);
+
+      setState(() {
+        selectedImage = null;
+      });
+
       await fetchProfile();
-      debugPrint("STATUS: ${response.statusCode}");
-      debugPrint(resBody);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Photo updated successfully ✅")),
+      );
+    } else {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Erreur upload photo")),
+      );
     }
   }
 
-  // Met à jour le champ profile_photo du profil candidat.
   Future<void> savePhotoToProfile(String filename) async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('token');
 
     if (token == null || token.isEmpty) return;
 
-    await http.put(
+    final response = await http.put(
       Uri.parse('$baseUrl/candidate-profile'),
       headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $token',
       },
-      body: jsonEncode({"profile_photo": filename}),
+      body: jsonEncode({
+        "profile_photo": filename,
+      }),
     );
+
+    debugPrint("SAVE PHOTO STATUS: ${response.statusCode}");
+    debugPrint("SAVE PHOTO BODY: ${response.body}");
   }
 
-  // Retourne une chaîne sûre pour l'affichage, en gérant null et vide.
   String _safeString(dynamic value, {String fallback = ''}) {
     if (value == null) return fallback;
     final text = value.toString().trim();
@@ -240,7 +214,6 @@ class _CandidateProfileScreenState extends State<CandidateProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Affiche un écran de chargement tant que les données ne sont pas prêtes.
     if (isLoading) {
       return const Scaffold(
         backgroundColor: backgroundBottom,
@@ -248,43 +221,20 @@ class _CandidateProfileScreenState extends State<CandidateProfileScreen> {
       );
     }
 
-    // Affiche un message d'erreur si la récupération du profil a échoué.
     if (errorMessage != null) {
       return Scaffold(
         backgroundColor: backgroundBottom,
         body: Center(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  errorMessage!,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.white, fontSize: 15),
-                ),
-                const SizedBox(height: 14),
-                ElevatedButton(
-                  onPressed: () {
-                    setState(() {
-                      isLoading = true;
-                      errorMessage = null;
-                    });
-                    fetchProfile();
-                  },
-                  child: const Text("Réessayer"),
-                ),
-              ],
-            ),
+          child: Text(
+            errorMessage!,
+            style: const TextStyle(color: Colors.white),
           ),
         ),
       );
     }
 
-    // Détermine si le profil candidat existe ou si l'utilisateur doit le créer.
     final bool profileNotCreated = profile == null;
 
-    final String fullName = "Candidate";
     final String headline = profileNotCreated
         ? "Complete your profile"
         : _safeString(
@@ -307,115 +257,106 @@ class _CandidateProfileScreenState extends State<CandidateProfileScreen> {
     final String githubLink = _safeString(profile?['github_link']);
     final String behanceLink = _safeString(profile?['behance_link']);
     final String personalWebsite = _safeString(profile?['personal_website']);
-    final String phone = _safeString(profile?['phone_number'], fallback: "Not added yet");
-    final String email = _safeString(profile?['email'], fallback: "Not added yet");
+    final String phone =
+        _safeString(profile?['phone_number'], fallback: "Not added yet");
+    final String email =
+        _safeString(profile?['email'], fallback: "Not added yet");
 
-    final String profilePhoto =
-        profile?['profile_photo'] != null && profile?['profile_photo'] != ""
-        ? "http://192.168.100.47:5000/${profile!['profile_photo']}"
-        : "";
+    final String profilePhoto = getImageUrl(profile?['profile_photo']);
 
-    // Affiche le contenu principal du profil : en-tête, actions rapides et
-    // sections supplémentaires.
     return Scaffold(
       backgroundColor: backgroundBottom,
       body: Container(
-        width: double.infinity,
         decoration: const BoxDecoration(
           gradient: LinearGradient(
+            colors: [backgroundTop, backgroundBottom],
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [backgroundTop, backgroundBottom],
           ),
         ),
         child: SafeArea(
-          child: Column(
-            children: [
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(18, 16, 18, 24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildTopBar(),
-                      const SizedBox(height: 24),
-                      _buildProfileHeader(
-                        fullName: fullName,
-                        headline: headline,
-                        location: location,
-                        profilePhoto: profilePhoto,
-                      ),
-                      const SizedBox(height: 24),
-                      // Boutons d'actions rapides pour modifier le profil, gérer le
-                      // CV, l'expérience et la visibilité.
-                      _buildQuickActions(context),
-                      const SizedBox(height: 24),
-                      if (profileNotCreated) ...[
-                        _buildSectionTitle("Profile Status"),
-                        const SizedBox(height: 12),
-                        _buildEmptyProfileCard(),
-                        const SizedBox(height: 24),
-                      ],
-                      _buildSectionTitle("About Me"),
-                      const SizedBox(height: 12),
-                      _buildAboutCard(about),
-                      const SizedBox(height: 24),
-                      _buildSectionTitle("Links"),
-                      const SizedBox(height: 12),
-                      _buildLinksCard(
-                        githubLink: githubLink,
-                        behanceLink: behanceLink,
-                        personalWebsite: personalWebsite,
-                      ),
-                      _buildSectionTitle("Contact"),
-                      const SizedBox(height: 12),
-                      _buildContactCard(
-                        phone: phone,
-                        email: email,
-                      ),
-                      const SizedBox(height: 24),
-                      
-                     
-                    ],
-                  ),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(18, 16, 18, 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildTopBar(),
+                const SizedBox(height: 24),
+                _buildProfileHeader(
+                  fullName: "Candidate",
+                  headline: headline,
+                  location: location,
+                  profilePhoto: profilePhoto,
                 ),
-              ),
-            ],
+                const SizedBox(height: 24),
+                _buildQuickActions(context),
+                const SizedBox(height: 24),
+                if (profileNotCreated) ...[
+                  _buildSectionTitle("Profile Status"),
+                  const SizedBox(height: 12),
+                  _buildCardText(
+                    "Profil non encore créé. Tu peux le compléter depuis Edit Profile.",
+                  ),
+                  const SizedBox(height: 24),
+                ],
+                _buildSectionTitle("About Me"),
+                const SizedBox(height: 12),
+                _buildCardText(about),
+                const SizedBox(height: 24),
+                _buildSectionTitle("Links"),
+                const SizedBox(height: 12),
+                _buildLinksCard(
+                  githubLink: githubLink,
+                  behanceLink: behanceLink,
+                  personalWebsite: personalWebsite,
+                ),
+                const SizedBox(height: 24),
+                _buildSectionTitle("Contact"),
+                const SizedBox(height: 12),
+                _buildContactCard(phone: phone, email: email),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  // Barre supérieure de l'écran avec le titre du profil.
   Widget _buildTopBar() {
-    return Row(
-      children: [
-        const Spacer(),
-        const Text(
-          "My Profile",
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 19,
-            fontWeight: FontWeight.w800,
-          ),
+  return Row(
+    children: [
+      const Spacer(),
+      const Text(
+        "My Profile",
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 19,
+          fontWeight: FontWeight.w800,
         ),
-        const Spacer(),
-        Container(
+      ),
+      const Spacer(),
+
+      GestureDetector(
+        onTap: () {
+          Navigator.pushNamed(context, '/candidate-settings');
+        },
+        child: Container(
           width: 48,
           height: 48,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
             color: Colors.white.withOpacity(0.06),
           ),
-          child: const Icon(Icons.settings_outlined, color: Colors.white),
+          child: const Icon(
+            Icons.settings_outlined,
+            color: Colors.white,
+          ),
         ),
-      ],
-    );
-  }
+      ),
+    ],
+  );
+}
 
-  // En-tête du profil affichant la photo, le nom, la localisation et le badge
-  // de visibilité.
   Widget _buildProfileHeader({
     required String fullName,
     required String headline,
@@ -432,52 +373,55 @@ class _CandidateProfileScreenState extends State<CandidateProfileScreen> {
       ),
       child: Column(
         children: [
-          // Zone cliquable de la photo de profil : si l'utilisateur a déjà
-          // sélectionné une image locale, on affiche celle-ci sinon on affiche
-          // la photo de profil distante ou une icône par défaut.
           GestureDetector(
             onTap: pickImage,
-            child: Container(
-              width: 94,
-              height: 94,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white.withOpacity(0.08),
-                border: Border.all(color: Colors.white.withOpacity(0.06)),
-              ),
-              child: selectedImage != null
-                  ? ClipOval(
-                      child: Image.file(
-                        selectedImage!,
-                        fit: BoxFit.cover,
-                        width: 94,
-                        height: 94,
-                      ),
-                    )
-                  : profilePhoto.isNotEmpty
-                  ? ClipOval(
-                      child: Image.network(
-                        profilePhoto,
-                        fit: BoxFit.cover,
-                        width: 94,
-                        height: 94,
-                        loadingBuilder: (context, child, progress) {
-                          if (progress == null) return child;
-                          return const Center(
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          );
-                        },
-                      ),
-                    )
-                  : const Icon(Icons.person, size: 42, color: Colors.white),
+            child: Stack(
+              children: [
+                CircleAvatar(
+                  radius: 48,
+                  backgroundColor: Colors.white.withOpacity(0.08),
+                  child: CircleAvatar(
+                    radius: 44,
+                    backgroundColor: Colors.white.withOpacity(0.08),
+                    backgroundImage: selectedImage != null
+                        ? FileImage(selectedImage!)
+                        : profilePhoto.isNotEmpty
+                            ? NetworkImage(profilePhoto) as ImageProvider
+                            : null,
+                    child: selectedImage == null && profilePhoto.isEmpty
+                        ? const Icon(
+                            Icons.person,
+                            size: 42,
+                            color: Colors.white,
+                          )
+                        : null,
+                  ),
+                ),
+                Positioned(
+                  right: 0,
+                  bottom: 0,
+                  child: Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: primaryBlue,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: cardColor, width: 3),
+                    ),
+                    child: const Icon(
+                      Icons.camera_alt,
+                      color: Colors.white,
+                      size: 16,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 20),
-
-          // Lien d'action pour modifier la photo de profil via la galerie.
+          const SizedBox(height: 14),
           GestureDetector(
             onTap: pickImage,
-            child: Text(
+            child: const Text(
               "Modifier la photo",
               style: TextStyle(
                 color: primaryBlue,
@@ -486,9 +430,7 @@ class _CandidateProfileScreenState extends State<CandidateProfileScreen> {
               ),
             ),
           ),
-
           const SizedBox(height: 16),
-
           Text(
             dynamicUserName.isEmpty ? fullName : dynamicUserName,
             textAlign: TextAlign.center,
@@ -498,24 +440,22 @@ class _CandidateProfileScreenState extends State<CandidateProfileScreen> {
               fontWeight: FontWeight.w800,
             ),
           ),
+          const SizedBox(height: 6),
+          Text(
+            headline,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Colors.white60, fontSize: 14),
+          ),
+          const SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                Icons.location_on_outlined,
-                color: Colors.white.withOpacity(0.45),
-                size: 18,
-              ),
+              const Icon(Icons.location_on_outlined,
+                  color: Colors.white54, size: 18),
               const SizedBox(width: 6),
-              Flexible(
-                child: Text(
-                  location,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.48),
-                    fontSize: 14,
-                  ),
-                ),
+              Text(
+                location,
+                style: const TextStyle(color: Colors.white54, fontSize: 14),
               ),
             ],
           ),
@@ -526,7 +466,6 @@ class _CandidateProfileScreenState extends State<CandidateProfileScreen> {
     );
   }
 
-  // Badge de visibilité affichant l'état public/privé/selectionnel du profil.
   Widget _buildVisibilityBadge() {
     Color color;
     IconData icon;
@@ -574,10 +513,6 @@ class _CandidateProfileScreenState extends State<CandidateProfileScreen> {
     );
   }
 
-  // Section des actions rapides permettant de naviguer vers les écrans
-  // d'édition et de gestion du profil.
-  // Section offrant des boutons action vers les écrans de modification
-  // et de gestion du profil candidat.
   Widget _buildQuickActions(BuildContext context) {
     return Column(
       children: [
@@ -592,14 +527,7 @@ class _CandidateProfileScreenState extends State<CandidateProfileScreen> {
                     context,
                     '/edit-profile',
                   );
-
-                  if (result == true) {
-                    setState(() {
-                      isLoading = true;
-                      errorMessage = null;
-                    });
-                    await fetchProfile();
-                  }
+                  if (result == true) await fetchProfile();
                 },
               ),
             ),
@@ -613,14 +541,7 @@ class _CandidateProfileScreenState extends State<CandidateProfileScreen> {
                     context,
                     '/cv-skills',
                   );
-
-                  if (result == true) {
-                    setState(() {
-                      isLoading = true;
-                      errorMessage = null;
-                    });
-                    await fetchProfile();
-                  }
+                  if (result == true) await fetchProfile();
                 },
               ),
             ),
@@ -638,14 +559,7 @@ class _CandidateProfileScreenState extends State<CandidateProfileScreen> {
                     context,
                     '/experience-education',
                   );
-
-                  if (result == true) {
-                    setState(() {
-                      isLoading = true;
-                      errorMessage = null;
-                    });
-                    await fetchProfile();
-                  }
+                  if (result == true) await fetchProfile();
                 },
               ),
             ),
@@ -659,14 +573,7 @@ class _CandidateProfileScreenState extends State<CandidateProfileScreen> {
                     context,
                     '/privacy-visibility',
                   );
-
-                  if (result == true) {
-                    setState(() {
-                      isLoading = true;
-                      errorMessage = null;
-                    });
-                    await fetchProfile();
-                  }
+                  if (result == true) await fetchProfile();
                 },
               ),
             ),
@@ -692,41 +599,55 @@ class _CandidateProfileScreenState extends State<CandidateProfileScreen> {
     );
   }
 
-  // Bouton visuel réutilisable pour chaque action rapide.
   Widget _buildActionButton({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        height: 96,
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: cardColor,
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: cardBorderColor),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, color: primaryBlue, size: 24),
-            const Spacer(),
-            Text(label, style: actionButtonLabelStyle),
-          ],
-        ),
+  required IconData icon,
+  required String label,
+  required VoidCallback onTap,
+}) {
+  return GestureDetector(
+    onTap: onTap,
+    child: Container(
+      height: 112,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: cardBorderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: primaryBlue, size: 24),
+          const Spacer(),
+          Text(
+            label,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              height: 1.25,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+  Widget _buildSectionTitle(String title) {
+    return Text(
+      title,
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 18,
+        fontWeight: FontWeight.w800,
       ),
     );
   }
 
-  // Titre de section utilisé avant chaque bloc de contenu du profil.
-  Widget _buildSectionTitle(String title) {
-    return Text(title, style: sectionTitleTextStyle);
-  }
-
-  // Carte affichée lorsque le profil candidat n'a pas encore été créé.
-  Widget _buildEmptyProfileCard() {
+  Widget _buildCardText(String text) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
@@ -736,27 +657,16 @@ class _CandidateProfileScreenState extends State<CandidateProfileScreen> {
         border: Border.all(color: cardBorderColor),
       ),
       child: Text(
-        "Profil non encore créé. Tu peux le compléter depuis Edit Profile.",
-        style: cardBodyTextStyle.copyWith(height: 1.6),
+        text,
+        style: const TextStyle(
+          color: Colors.white70,
+          fontSize: 15,
+          height: 1.7,
+        ),
       ),
     );
   }
 
-  // Carte affichant la section "About Me" avec la biographie du candidat.
-  Widget _buildAboutCard(String about) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: cardBorderColor),
-      ),
-      child: Text(about, style: cardBodyTextStyle),
-    );
-  }
-
-  // Carte affichant les liens externes du candidat (GitHub, Behance, site web).
   Widget _buildLinksCard({
     required String githubLink,
     required String behanceLink,
@@ -768,6 +678,22 @@ class _CandidateProfileScreenState extends State<CandidateProfileScreen> {
       {"label": "Website", "value": personalWebsite},
     ];
 
+    return _buildListCard(links);
+  }
+
+  Widget _buildContactCard({
+    required String phone,
+    required String email,
+  }) {
+    final items = [
+      {"label": "Phone", "value": phone},
+      {"label": "Email", "value": email},
+    ];
+
+    return _buildListCard(items);
+  }
+
+  Widget _buildListCard(List<Map<String, String>> items) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
@@ -777,7 +703,7 @@ class _CandidateProfileScreenState extends State<CandidateProfileScreen> {
         border: Border.all(color: cardBorderColor),
       ),
       child: Column(
-        children: links.map((item) {
+        children: items.map((item) {
           final value = item["value"] ?? "";
           return Padding(
             padding: const EdgeInsets.only(bottom: 12),
@@ -808,129 +734,4 @@ class _CandidateProfileScreenState extends State<CandidateProfileScreen> {
       ),
     );
   }
-
-  // Carte réservée aux documents du candidat, ici un PDF de CV avec un bouton.
-  /*Widget _buildDocumentCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: cardBorderColor),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 54,
-            height: 54,
-            decoration: BoxDecoration(
-              color: Colors.redAccent.withOpacity(0.14),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: const Icon(
-              Icons.picture_as_pdf_rounded,
-              color: Colors.redAccent,
-              size: 28,
-            ),
-          ),
-          const SizedBox(width: 14),
-          const Expanded(
-            child: Text(
-              "candidate_resume.pdf",
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-          TextButton(
-            onPressed: () async {
-  final prefs = await SharedPreferences.getInstance();
-  final token = prefs.getString('token');
-
-  final response = await http.get(
-    Uri.parse('$baseUrl/cv/me'),
-    headers: {
-      'Authorization': 'Bearer $token',
-    },
-  );
-
-  final data = jsonDecode(response.body);
-
-  if (response.statusCode == 200) {
-    String url = data['cv']['file_url'];
-
-    debugPrint("CV URL: $url");
-
-    final uri = Uri.parse(url);
-
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri);
-    }
-  }
-},
-            child: const Text(
-              "View",
-              style: TextStyle(color: primaryBlue, fontWeight: FontWeight.w700),
-            ),
-          ),
-        ],
-      ),
-    );
-  }*/
-
-  // Carte affichant les informations de contact du candidat (téléphone et email).
-  Widget _buildContactCard({
-  required String phone,
-  required String email,
-}) {
-  final items = [
-    {"label": "Phone", "value": phone},
-    {"label": "Email", "value": email},
-  ];
-
-  return Container(
-    width: double.infinity,
-    padding: const EdgeInsets.all(18),
-    decoration: BoxDecoration(
-      color: cardColor,
-      borderRadius: BorderRadius.circular(22),
-      border: Border.all(color: cardBorderColor),
-    ),
-    child: Column(
-      children: items.map((item) {
-        final value = item["value"] ?? "";
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(
-                width: 80,
-                child: Text(
-                  item["label"] ?? "",
-                  style: const TextStyle(
-                    color: Color(0x8CFFFFFF),
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              Expanded(
-                child: Text(
-                  value.isEmpty ? "Not added yet" : value,
-                  style: const TextStyle(color: Colors.white, fontSize: 14),
-                ),
-              ),
-            ],
-          ),
-        );
-      }).toList(),
-    ),
-  );
-}
 }

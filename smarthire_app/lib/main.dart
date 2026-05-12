@@ -34,11 +34,14 @@ import 'package:smarthire_app/features/candidate/profile/cv_skills_screen.dart';
 import 'package:smarthire_app/features/candidate/profile/experience_education_screen.dart';
 import 'package:smarthire_app/features/candidate/profile/privacy_visibility_screen.dart';
 import 'package:smarthire_app/features/candidate/requests/request_decision_screen.dart';
+import 'package:smarthire_app/features/candidate/requests/requests_inbox_screen.dart';
 import 'package:smarthire_app/features/candidate/direct_chat_thread_screen.dart';
 import 'package:smarthire_app/features/candidate/jobs/saved_jobs_screen.dart';
 import 'package:smarthire_app/features/candidate/notifications_screen.dart';
 import 'package:smarthire_app/features/recruiter/notification.dart';
 import 'package:smarthire_app/features/candidate/requests/candidate_chat_screen.dart';
+import 'package:smarthire_app/features/candidate/company/company_profile_view_screen.dart';
+import 'package:smarthire_app/features/candidate/profile/candidate_setings.dart';
 /// ==============================
 /// RECRUITER
 /// ==============================
@@ -61,7 +64,19 @@ import 'package:smarthire_app/features/recruiter/search_candidate_screen.dart';
 /// ==============================
 /// ADMIN
 /// ==============================
+import 'package:smarthire_app/features/admin/admin_main.dart';
 import 'package:smarthire_app/features/admin/admin_stats_screen.dart';
+import 'package:smarthire_app/features/admin/admin_users_screen.dart';
+import 'package:smarthire_app/features/admin/admin_jobs_screen.dart';
+import 'package:smarthire_app/features/admin/admin_companies_screen.dart';
+import 'package:smarthire_app/features/admin/admin_config_screen.dart';
+import 'package:smarthire_app/features/admin/config/admin_account_screen.dart';
+import 'package:smarthire_app/features/admin/config/change_password.dart';
+import 'package:smarthire_app/features/admin/config/B_comp_screen.dart';
+import 'package:smarthire_app/features/admin/config/B_cand_screen.dart';
+import 'package:smarthire_app/features/admin/admin_company_details_screen.dart';
+import 'package:smarthire_app/features/admin/admin_candidate_details_screen.dart';
+
 
 void main() {
   runApp(const SmartHireApp());
@@ -74,6 +89,14 @@ class SmartHireApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
+      builder: (context, child) {
+        return MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            textScaler: const TextScaler.linear(1.0),
+          ),
+          child: child!,
+        );
+      },
       initialRoute: '/',
       navigatorObservers: [routeObserver],
 
@@ -128,10 +151,22 @@ class SmartHireApp extends StatelessWidget {
         '/privacy-visibility': (context) =>
             const PrivacyVisibilityScreen(),
 
-        '/request-decision': (context) => const RequestDecisionScreen(),
+
+        
+        '/requests-inbox': (context) => const RequestsInboxScreen(),
         '/direct-chat': (context) => const DirectChatThreadScreen(),
         '/notifications': (context) => const NotificationsScreen(),
         '/chat_candidate': (context) => const CandidateChatScreen(),
+        '/candidate-company-profile': (context) {
+
+         final companyId =
+         ModalRoute.of(context)!.settings.arguments as int;
+
+         return CompanyProfileViewScreen(
+           companyId: companyId,
+          );
+       },
+        '/candidate-settings': (context) => const CandidateSettingsScreen(),
 
         /// ==============================
         /// RECRUITER 🔥
@@ -181,7 +216,22 @@ class SmartHireApp extends StatelessWidget {
         /// ==============================
         /// ADMIN
         /// ==============================
-        '/admin': (context) => const AdminStatsScreen(),
+        '/admin': (context) => const AdminMainScreen(),
+        '/admin-users': (context) => const AdminUsersScreen(),
+        '/admin-jobs': (context) => const AdminJobsScreen(),
+        '/admin-companies': (context) => const AdminCompaniesScreen(),
+        '/admin-config': (context) => const AdminConfigScreen(),
+        '/admin-stats': (context) => const AdminStatsScreen(),
+        '/admin-account': (context) => const AdminAccountScreen(),
+        '/admin-change-password': (context) => const AdminChangePasswordScreen(),
+        '/blocked-companies': (context) => const BlockedCompaniesScreen(),
+        '/blocked-candidates': (context) => const BlockedCandidatesScreen(),
+        '/admin-company-details': (context) => const AdminCompanyDetailsScreen(),
+        '/admin-candidate-details': (context) => const AdminCandidateDetailsScreen(),
+
+      
+
+        
       },
     );
   }

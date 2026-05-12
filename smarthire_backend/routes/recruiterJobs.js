@@ -10,16 +10,26 @@ const { protect, authorize } = require("../middleware/authMiddleware");
 router.post("/", protect, authorize("recruiter"), async (req, res) => {
   try {
     const {
-      title,
-      description,
-      location,
-      salary_min,
-      salary_max,
-      category,
-      type,
-      work_mode,
+     title,
+     description,
+     location,
+
+     salary_min,
+     salary_max,
+
+     category,
+     type,
+     work_mode,
+
+      requirements,
+      experience,
+      education,
+      languages,
+      team,
+
       skills,
       status
+
     } = req.body;
 
     // 🔍 validation
@@ -46,8 +56,8 @@ router.post("/", protect, authorize("recruiter"), async (req, res) => {
     // 📝 insert job
     const [result] = await db.query(
       `INSERT INTO jobs 
-      (title, description, location, salary_min, salary_max, category,type, work_mode,status, company_id, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?)`,
+      (title, description, location, salary_min, salary_max, category,type, requirements,experience,education,languages,team, work_mode,status, company_id, created_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         title,
         description,
@@ -56,10 +66,15 @@ router.post("/", protect, authorize("recruiter"), async (req, res) => {
         salary_max,
         category,
         type,
+        requirements,
+        experience,
+        education,
+        languages,
+        team,
         work_mode,
         status || "active",
         companyId,
-        req.user.id
+       req.user.id
       ]
     );
 
@@ -297,27 +312,428 @@ router.put("/:id/view", async (req, res) => {
 // ==============================
 router.get("/:id/applicants", protect, authorize("recruiter"), async (req, res) => {
   try {
+
     const jobId = req.params.id;
 
-    const [rows] = await db.query(`
-      SELECT 
-  u.id as user_id,
-  u.full_name,
-  cp.professional_headline as title,
-  cp.location,
-  cp.profile_photo as profile_image,
-  cp.is_public,
-  a.status
-FROM applications a
-JOIN users u ON a.candidate_id = u.id
-LEFT JOIN candidate_profiles cp ON cp.user_id = u.id
-WHERE a.job_id = ?
-ORDER BY a.created_at DESC
-    `, [jobId]);
+    // =========================
+    // GET JOB
+    // =========================
+    const [jobRows] = await db.query(
+      "SELECT * FROM jobs WHERE id = ?",
+      [jobId]
+    );
 
-    res.json({ applicants: rows });
+    if (jobRows.length === 0) {
+      return res.status(404).json({
+        message: "Job introuvable"
+      });
+    }
+
+    const job = jobRows[0];
+
+    // =========================
+    // JOB DATA
+    // =========================
+    const jobSkills = job.requirements
+      ? job.requirements
+          .split(",")
+          .map(s => s.trim().toLowerCase())
+      : [];
+
+    const jobLocation = job.location || "";
+
+    const requiredExp = job.experience || 0;
+
+    // =========================
+    // GET APPLICANTS
+    // =========================
+    const [rows] = await db.query(
+      `
+      SELECT
+        a.id as application_id,
+        a.candidate_id,
+        a.status,
+
+        u.id as user_id,
+        u.full_name,
+
+        cp.professional_headline as title,
+        cp.location,
+        cp.profile_photo as profile_image,
+        cp.is_public
+
+      FROM applications a
+
+      JOIN users u
+        ON a.candidate_id = u.id
+
+      LEFT JOIN candidate_profiles cp
+        ON cp.user_id = u.id
+
+      WHERE a.job_id = ?
+
+      ORDER BY a.created_at DESC
+      `,
+      [jobId]
+    );
+
+    let results = [];
+
+    // =========================
+    // LOOP APPLICANTS
+    // =========================
+    for (let app of rows) {
+
+      const userId = app.user_id;
+
+      // =========================
+      // GET SKILLS
+      // =========================
+      const [skillsRows] = await db.query(
+        "SELECT skill_name FROM skills WHERE user_id = ?",
+        [userId]
+      );
+
+      const candidateSkills = skillsRows.map(skill =>
+        skill.skill_name.toLowerCase()
+      );
+
+      // =========================
+// SMART SKILLS MATCH
+// =========================
+
+let matchCount = 0;
+
+for (let jobSkill of jobSkills) {
+
+  for (let candidateSkill of candidateSkills) {
+
+    const j = jobSkill.toLowerCase().trim();
+    const c = candidateSkill.toLowerCase().trim();
+
+    // exact match
+    if (j === c) {
+      matchCount += 1;
+      break;
+    }
+
+    // partial match
+    if (
+      j.includes(c) ||
+      c.includes(j)
+    ) {
+      matchCount += 0.8;
+      break;
+    }
+
+    // AI-like keyword similarity
+    const jobWords = j.split(" ");
+    const candidateWords = c.split(" ");
+
+    const commonWords = jobWords.filter(word =>
+      candidateWords.includes(word)
+    );
+
+    if (commonWords.length > 0) {
+      matchCount += 0.5;
+      break;
+    }
+  }
+}
+
+let skillScore = 0;
+
+if (jobSkills.length > 0) {
+  skillScore = Math.min(matchCount / jobSkills.length, 1);
+}
+
+      // =========================
+      // EXPERIENCE SCORE
+      // =========================
+      const [expRows] = await db.query(
+        "SELECT COUNT(*) as total FROM experiences WHERE user_id = ?",
+        [userId]
+      );
+
+      const candidateExp = expRows[0]?.total || 0;
+
+      let expScore = 0;
+
+      if (requiredExp > 0) {
+        expScore = Math.min(candidateExp / requiredExp, 1);
+      }
+
+      // =========================
+// ALGERIA REGIONS
+// =========================
+
+const regions = {
+
+  centre: [
+    "alger",
+    "blida",
+    "boumerdes",
+    "tipaza",
+    "medea",
+    "ain defla",
+    "tizi ouzou",
+    "bouira",
+    "chlef",
+    "djelfa"
+  ],
+
+  est: [
+    "constantine",
+    "annaba",
+    "setif",
+    "bejaia",
+    "jijel",
+    "skikda",
+    "guelma",
+    "mila",
+    "batna",
+    "khenchela",
+    "tebessa",
+    "souk ahras",
+    "el taref",
+    "oum el bouaghi",
+    "bordj bou arreridj"
+  ],
+
+  ouest: [
+    "oran",
+    "tlemcen",
+    "sidi bel abbes",
+    "ain temouchent",
+    "mostaganem",
+    "mascara",
+    "relizane",
+    "tiaret",
+    "saida",
+    "naama",
+    "tissemsilt"
+  ],
+
+  sud: [
+    "adrar",
+    "tamanrasset",
+    "illizi",
+    "bechar",
+    "ouargla",
+    "ghardaia",
+    "laghouat",
+    "biskra",
+    "el oued",
+    "timimoun",
+    "bordj badji mokhtar",
+    "beni abbes",
+    "in salah",
+    "in guezzam",
+    "touggourt",
+    "djanet",
+    "el mghair",
+    "el meniaa"
+  ]
+
+};
+
+
+// =========================
+// SMART LOCATION SCORE
+// =========================
+
+let locationScore = 0;
+
+const candidateLocation =
+  (app.location || "").toLowerCase().trim();
+
+const companyLocation =
+  (jobLocation || "").toLowerCase().trim();
+
+
+// 🔥 SAME WILAYA
+if (candidateLocation === companyLocation) {
+
+  locationScore = 1;
+
+}
+
+else {
+
+  let sameRegion = false;
+
+  // 🔥 CHECK SAME REGION
+  for (const region in regions) {
+
+    const wilayas = regions[region];
+
+    if (
+      wilayas.includes(candidateLocation) &&
+      wilayas.includes(companyLocation)
+    ) {
+
+      sameRegion = true;
+      break;
+
+    }
+  }
+
+  // 🔥 SAME REGION
+  if (sameRegion) {
+
+    locationScore = 0.7;
+
+  }
+
+  // 🔥 DIFFERENT REGION
+  else {
+
+    locationScore = 0.3;
+
+  }
+}
+
+      // =========================
+// EDUCATION MATCH
+// =========================
+
+const [eduRows] = await db.query(
+  "SELECT degree FROM education WHERE user_id = ?",
+  [userId]
+);
+
+let educationScore = 0;
+
+const degrees = eduRows.map(e =>
+  (e.degree || "").toLowerCase()
+);
+
+if (
+  degrees.some(d =>
+    d.includes("master") ||
+    d.includes("engineer") ||
+    d.includes("ingénieur")
+  )
+) {
+  educationScore = 1;
+}
+else if (
+  degrees.some(d =>
+    d.includes("licence") ||
+    d.includes("bachelor")
+  )
+) {
+  educationScore = 0.7;
+}
+else {
+  educationScore = 0.4;
+}
+
+      // =========================
+// DYNAMIC AI SCORE
+// =========================
+
+let totalWeight = 0;
+let weightedScore = 0;
+
+
+// =========================
+// SKILLS
+// =========================
+
+if (jobSkills.length > 0) {
+
+  weightedScore += skillScore * 0.50;
+  totalWeight += 0.50;
+
+}
+
+
+// =========================
+// EXPERIENCE
+// =========================
+
+if (requiredExp > 0) {
+
+  weightedScore += expScore * 0.20;
+  totalWeight += 0.20;
+
+}
+
+
+// =========================
+// EDUCATION
+// =========================
+
+weightedScore += educationScore * 0.15;
+totalWeight += 0.15;
+
+
+// =========================
+// LOCATION
+// =========================
+
+weightedScore += locationScore * 0.15;
+totalWeight += 0.15;
+
+
+// =========================
+// FINAL SCORE
+// =========================
+
+let finalScore = 0;
+
+if (totalWeight > 0) {
+
+  finalScore = Math.round(
+    (weightedScore / totalWeight) * 100
+  );
+
+}
+
+
+// 🔥 anti NaN
+if (isNaN(finalScore)) {
+  finalScore = 0;
+}
+
+      // =========================
+      // SAVE SCORE IN DATABASE
+      // =========================
+      await db.query(
+        `
+        UPDATE applications
+        SET score = ?
+        WHERE id = ?
+        `,
+        [finalScore, app.application_id]
+      );
+
+      // =========================
+      // PUSH RESULT
+      // =========================
+      results.push({
+        ...app,
+        score: finalScore
+      });
+    }
+
+    // =========================
+    // SORT BY SCORE
+    // =========================
+    results.sort((a, b) => b.score - a.score);
+
+    // =========================
+    // RESPONSE
+    // =========================
+    res.json({
+      applicants: results
+    });
 
   } catch (err) {
+
+    console.log(err);
+
     res.status(500).json({
       message: "Erreur serveur",
       error: err.message
@@ -333,18 +749,32 @@ router.get("/candidate-full/:id", protect, async (req, res) => {
     const userId = req.params.id;
 
     // PROFILE
-    const [profile] = await db.query(`
-      SELECT 
-        u.full_name as name,
-        u.phone,
-        cp.professional_headline as title,
-        cp.location,
-        cp.profile_photo as profile_image,
-        cp.is_public
-      FROM users u
-      LEFT JOIN candidate_profiles cp ON cp.user_id = u.id
-      WHERE u.id = ?
-    `, [userId]);
+  const [profile] = await db.query(`
+  SELECT 
+    u.id,
+    u.full_name as name,
+    u.email,
+
+    cp.professional_headline as title,
+    cp.location,
+    cp.profile_photo,
+    cp.profile_photo as profile_image,
+    cp.phone_number,
+    cp.email as profile_email,
+    cp.bio,
+    cp.github_link,
+    cp.behance_link,
+    cp.personal_website,
+    cp.is_public,
+    cp.cv_generated as cv_file
+
+  FROM users u
+
+  LEFT JOIN candidate_profiles cp 
+    ON cp.user_id = u.id
+
+  WHERE u.id = ?
+`, [userId]);
 
     // SKILLS
     const [skills] = await db.query(

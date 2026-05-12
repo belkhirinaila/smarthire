@@ -123,7 +123,7 @@ class _ResetOtpScreenState extends State<ResetOtpScreen> {
 
     try {
       final response = await http.post(
-        Uri.parse("http://192.168.100.47:5000/api/auth/verify-otp"),
+        Uri.parse("http://192.168.100.47:5000/api/auth/verify-reset-otp"),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
           "email": widget.email,

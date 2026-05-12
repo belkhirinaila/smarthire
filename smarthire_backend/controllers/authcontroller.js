@@ -437,6 +437,11 @@ const login = async (req, res) => {
     }
 
     const user = users[0];
+      if (user.is_blocked == 1) {
+      return res.status(403).json({
+        message: "Votre compte est bloqué. Contactez l'administrateur."
+      });
+    }
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
@@ -493,6 +498,8 @@ const getMe = async (req, res) => {
     });
   }
 };
+
+
 
 module.exports = {
   register,

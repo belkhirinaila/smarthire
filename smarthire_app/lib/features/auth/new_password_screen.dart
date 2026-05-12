@@ -89,7 +89,7 @@ class _NewPasswordScreenState extends State<NewPasswordScreen> {
     try {
       // Envoi de la requête POST au backend avec l'email et le nouveau mot de passe.
       final response = await http.post(
-        Uri.parse("http://127.0.0.1:5000/api/auth/reset-password"),
+        Uri.parse("http://192.168.100.47:5000/api/auth/reset-password"),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
           "email": email,

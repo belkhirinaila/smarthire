@@ -3,14 +3,15 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
-class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key});
+class CandidateSettingsScreen extends StatefulWidget {
+  const CandidateSettingsScreen({super.key});
 
   @override
-  State<SettingsScreen> createState() => _SettingsScreenState();
+  State<CandidateSettingsScreen> createState() =>
+      _CandidateSettingsScreenState();
 }
 
-class _SettingsScreenState extends State<SettingsScreen> {
+class _CandidateSettingsScreenState extends State<CandidateSettingsScreen> {
   static const Color primaryBlue = Color(0xFF1E6CFF);
   static const Color bgTop = Color(0xFF08162D);
   static const Color bgBottom = Color(0xFF050A12);
@@ -26,6 +27,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> changePassword() async {
     final oldController = TextEditingController();
     final newController = TextEditingController();
+    final confirmController = TextEditingController();
 
     showDialog(
       context: context,
@@ -33,7 +35,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         backgroundColor: cardColor,
         title: const Text(
           "Change Password",
-          style: TextStyle(color: Colors.white),
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -41,6 +43,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _dialogField("Old Password", oldController, true),
             const SizedBox(height: 12),
             _dialogField("New Password", newController, true),
+            const SizedBox(height: 12),
+            _dialogField("Confirm Password", confirmController, true),
           ],
         ),
         actions: [
@@ -50,10 +54,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           TextButton(
             onPressed: () async {
+              if (oldController.text.trim().isEmpty ||
+                  newController.text.trim().isEmpty ||
+                  confirmController.text.trim().isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Please fill all fields")),
+                );
+                return;
+              }
+
+              if (newController.text.trim() !=
+                  confirmController.text.trim()) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Passwords do not match")),
+                );
+                return;
+              }
+
               final token = await getToken();
 
               final res = await http.put(
-                Uri.parse("$baseUrl/auth/change-password"),
+                Uri.parse("$baseUrl/candidate-profile/change-password"),
                 headers: {
                   "Authorization": "Bearer $token",
                   "Content-Type": "application/json",
@@ -64,43 +85,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 }),
               );
 
-              final data = jsonDecode(res.body);
-
               if (!mounted) return;
 
               Navigator.pop(context);
 
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(data["message"] ?? "Erreur"),
-                ),
+                SnackBar(content: Text(res.body)),
               );
             },
             child: const Text("Save"),
           ),
         ],
       ),
-    );
-  }
-
-  Future<void> deactivateCompany() async {
-    final token = await getToken();
-
-    final res = await http.delete(
-      Uri.parse("$baseUrl/company"),
-      headers: {"Authorization": "Bearer $token"},
-    );
-
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(res.body)),
-    );
-
-    Navigator.pushNamedAndRemoveUntil(
-      context,
-      '/login',
-      (route) => false,
     );
   }
 
@@ -117,39 +113,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  void confirmDeactivate() {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: cardColor,
-        title: const Text(
-          "Deactivate Account",
-          style: TextStyle(color: Colors.white),
-        ),
-        content: const Text(
-          "Are you sure you want to deactivate this company account?",
-          style: TextStyle(color: Colors.white70),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Cancel"),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              deactivateCompany();
-            },
-            child: const Text(
-              "Deactivate",
-              style: TextStyle(color: Colors.red),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   void confirmLogout() {
     showDialog(
       context: context,
@@ -157,7 +120,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         backgroundColor: cardColor,
         title: const Text(
           "Logout",
-          style: TextStyle(color: Colors.white),
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         content: const Text(
           "Are you sure you want to logout?",
@@ -219,7 +182,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   const SizedBox(width: 14),
                   const Text(
-                    "Company Settings",
+                    "Candidate Settings",
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 22,
@@ -242,14 +205,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
               const SizedBox(height: 20),
 
-              _sectionTitle("Danger Zone"),
-
-              _dangerItem(
-                Icons.delete_forever_rounded,
-                "Deactivate Account",
-                "Disable company account",
-                confirmDeactivate,
-              ),
+              _sectionTitle("Session"),
 
               _logoutItem(),
             ],
@@ -310,8 +266,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 children: [
                   Text(
                     title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w700,
@@ -321,8 +275,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   const SizedBox(height: 4),
                   Text(
                     subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       color: Colors.white54,
                       fontSize: 12,
@@ -342,70 +294,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _dangerItem(
-    IconData icon,
-    String title,
-    String subtitle,
-    VoidCallback onTap,
-  ) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        height: 76,
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.symmetric(horizontal: 14),
-        decoration: BoxDecoration(
-          color: Colors.red.withOpacity(0.12),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: Colors.red.withOpacity(0.22)),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: Colors.red.withOpacity(0.18),
-                borderRadius: BorderRadius.circular(13),
-              ),
-              child: Icon(icon, color: Colors.red, size: 22),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      color: Colors.red,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(
-                      color: Colors.white54,
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Icon(
-              Icons.arrow_forward_ios,
-              color: Colors.red,
-              size: 15,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _logoutItem() {
     return GestureDetector(
       onTap: confirmLogout,
@@ -415,6 +303,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         decoration: BoxDecoration(
           color: cardColor,
           borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: Colors.white.withOpacity(0.04)),
         ),
         child: Row(
           children: [
@@ -422,12 +311,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
               width: 42,
               height: 42,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.08),
+                color: Colors.red.withOpacity(0.15),
                 borderRadius: BorderRadius.circular(13),
               ),
               child: const Icon(
                 Icons.logout_rounded,
-                color: Colors.white,
+                color: Colors.red,
                 size: 22,
               ),
             ),
@@ -438,6 +327,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 style: TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
+                  fontSize: 15,
                 ),
               ),
             ),

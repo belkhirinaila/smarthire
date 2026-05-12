@@ -15,78 +15,81 @@ class AdminMainScreen extends StatefulWidget {
 
 class _AdminMainScreenState extends State<AdminMainScreen> {
 
-  /// 🎨 COLORS (نفس app)
   static const Color primaryBlue = Color(0xFF1E6CFF);
-  static const Color backgroundBottom = Color(0xFF050A12);
+  static const Color backgroundBottom = Color(0xFF081015);
 
-  /// 🔢 index
   int currentIndex = 0;
 
-  /// 📱 SCREENS (كاملين مربوطين)
   final List<Widget> screens = const [
-    AdminStatsScreen(),       // 0
-    AdminUsersScreen(),       // 1
-    AdminJobsScreen(),        // 2
-    AdminCompaniesScreen(),   // 3
-    AdminConfigScreen(),      // 4
+
+    AdminStatsScreen(),
+    AdminUsersScreen(),
+    AdminJobsScreen(),
+    AdminCompaniesScreen(),
+    AdminConfigScreen(),
   ];
 
   @override
   Widget build(BuildContext context) {
+
     return Scaffold(
+
       backgroundColor: backgroundBottom,
 
-      /// 🔥 نفس candidate
       body: IndexedStack(
         index: currentIndex,
         children: screens,
       ),
 
-      /// 🔥 NAVBAR PRO
-      bottomNavigationBar: Container(
-        color: backgroundBottom,
-        padding: const EdgeInsets.fromLTRB(14, 10, 14, 18),
-
+      bottomNavigationBar: SafeArea(
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+
+          height: 74,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+
           decoration: BoxDecoration(
-            color: const Color(0xFF0A1220).withOpacity(0.95),
-            borderRadius: BorderRadius.circular(28),
-            border: Border.all(color: Colors.white.withOpacity(0.05)),
+            color: backgroundBottom,
+            border: Border(
+              top: BorderSide(
+                color: Colors.white.withOpacity(0.04),
+              ),
+            ),
           ),
 
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            mainAxisAlignment:
+                MainAxisAlignment.spaceAround,
+
             children: [
 
-              _buildNavItem(
-                index: 0,
-                icon: Icons.dashboard,
-                label: "Stats",
+              _navItem(
+                0,
+                Icons.dashboard_rounded,
+                "Stats",
               ),
 
-              _buildNavItem(
-                index: 1,
-                icon: Icons.people,
-                label: "Users",
+              _navItem(
+                1,
+                Icons.people_alt_rounded,
+                "Users",
               ),
 
-              _buildNavItem(
-                index: 2,
-                icon: Icons.work,
-                label: "Jobs",
+              _navItem(
+                2,
+                Icons.work_rounded,
+                "Jobs",
               ),
 
-              _buildNavItem(
-                index: 3,
-                icon: Icons.business,
-                label: "Companies",
+              _navItem(
+                3,
+                Icons.business_rounded,
+                "Companies",
               ),
 
-              _buildNavItem(
-                index: 4,
-                icon: Icons.settings,
-                label: "Config",
+              _navItem(
+                4,
+                Icons.settings_rounded,
+                "Config",
               ),
             ],
           ),
@@ -95,45 +98,75 @@ class _AdminMainScreenState extends State<AdminMainScreen> {
     );
   }
 
-  /// 🔥 NAV ITEM (نفس candidate EXACT)
-  Widget _buildNavItem({
-    required int index,
-    required IconData icon,
-    required String label,
-  }) {
-    final bool isSelected = currentIndex == index;
+  Widget _navItem(
+    int index,
+    IconData icon,
+    String label,
+  ) {
+
+    final bool selected =
+        currentIndex == index;
 
     return GestureDetector(
+
       onTap: () {
-        if (currentIndex == index) return;
 
         setState(() {
           currentIndex = index;
         });
       },
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            icon,
-            color: isSelected
-                ? primaryBlue
-                : Colors.white.withOpacity(0.65),
-            size: 24,
-          ),
-          const SizedBox(height: 6),
-          Text(
-            label,
-            style: TextStyle(
-              color: isSelected
+
+      child: AnimatedContainer(
+
+        duration: const Duration(milliseconds: 220),
+
+        padding: const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: 8,
+        ),
+
+        decoration: BoxDecoration(
+
+          color: selected
+              ? primaryBlue.withOpacity(0.12)
+              : Colors.transparent,
+
+          borderRadius: BorderRadius.circular(16),
+        ),
+
+        child: Column(
+          mainAxisAlignment:
+              MainAxisAlignment.center,
+
+          children: [
+
+            Icon(
+              icon,
+
+              color: selected
                   ? primaryBlue
-                  : Colors.white.withOpacity(0.65),
-              fontSize: 12,
-              fontWeight:
-                  isSelected ? FontWeight.w700 : FontWeight.w500,
+                  : Colors.white54,
+
+              size: 24,
             ),
-          ),
-        ],
+
+            const SizedBox(height: 4),
+
+            Text(
+              label,
+
+              style: TextStyle(
+
+                color: selected
+                    ? primaryBlue
+                    : Colors.white54,
+
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

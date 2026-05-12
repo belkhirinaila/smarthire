@@ -1,4 +1,5 @@
 const express = require("express");
+console.log("🔥🔥🔥 NEW FILE WORKING 🔥🔥🔥");
 const router = express.Router();
 const db = require("../config/db");
 const { protect, authorize } = require("../middleware/authMiddleware");
@@ -8,11 +9,13 @@ const { protect, authorize } = require("../middleware/authMiddleware");
 // GET APPLICANTS WITH FILTER
 // ==============================
 router.get("/:jobId", protect, authorize("recruiter"), async (req, res) => {
+  console.log("🔥 APPLICANTS ROUTE HIT");
+
   try {
     const jobId = req.params.jobId;
-    const { status } = req.query; // 🔥 filter
+    const { status } = req.query;
 
-    // 🔍 Vérifier que le job appartient au recruiter
+    // 🔍 Vérifier ownership du job
     const [job] = await db.query(
       "SELECT id FROM jobs WHERE id=? AND created_by=?",
       [jobId, req.user.id]
@@ -24,40 +27,201 @@ router.get("/:jobId", protect, authorize("recruiter"), async (req, res) => {
       });
     }
 
-    // 🧱 Query de base
+    // ==============================
+    // GET APPLICATIONS
+    // ==============================
     let query = `
       SELECT 
         applications.id AS application_id,
+        applications.candidate_id,
         applications.status,
-        applications.score,
         applications.created_at,
-        users.id,
+
+        users.id AS user_id,
         users.full_name,
+
         candidate_profiles.location,
-        candidate_profiles.professional_headline
+        candidate_profiles.professional_headline,
+        candidate_profiles.profile_photo
+
       FROM applications
-      JOIN users ON users.id = applications.candidate_id
+
+      JOIN users 
+        ON users.id = applications.candidate_id
+
       LEFT JOIN candidate_profiles 
         ON candidate_profiles.user_id = users.id
+
       WHERE applications.job_id = ?
     `;
 
     let params = [jobId];
 
-    // 🔥 Filtrer par status (pending / shortlisted / rejected)
+    // 🔥 filter status
     if (status) {
       query += " AND applications.status = ?";
       params.push(status);
     }
 
-    // 🔽 Trier les plus récents en premier
+    // 🔽 sort by recent
     query += " ORDER BY applications.created_at DESC";
 
-    const [applicants] = await db.query(query, params);
+    const [apps] = await db.query(query, params);
 
-    res.status(200).json({ applicants });
+    console.log("🔥 APPS FOUND:", apps.length);
+
+    // ==============================
+    // GET JOB
+    // ==============================
+    const [jobRows] = await db.query(
+      "SELECT * FROM jobs WHERE id = ?",
+      [jobId]
+    );
+
+    if (jobRows.length === 0) {
+      return res.status(404).json({
+        message: "Job introuvable"
+      });
+    }
+
+    const jobData = jobRows[0];
+
+    // ==============================
+    // JOB SKILLS
+    // ==============================
+    const jobSkills = jobData.requirements
+      ? jobData.requirements
+          .split(",")
+          .map(s => s.trim().toLowerCase())
+      : [];
+
+    const jobWilaya = jobData.location || "";
+    const requiredExp = jobData.experience || 0;
+
+    let results = [];
+
+    // ==============================
+    // LOOP APPLICANTS
+    // ==============================
+    for (let app of apps) {
+
+      const userId = app.user_id;
+
+      // ==============================
+      // GET CANDIDATE SKILLS
+      // ==============================
+      const [skillsRows] = await db.query(
+        "SELECT skill_name FROM skills WHERE user_id = ?",
+        [userId]
+      );
+
+      const candidateSkills = skillsRows.map(skill =>
+        skill.skill_name.toLowerCase()
+      );
+
+      // ==============================
+      // SKILL MATCH
+      // ==============================
+      let matchCount = jobSkills.filter(jobSkill =>
+        candidateSkills.some(candidateSkill =>
+          candidateSkill.includes(jobSkill) ||
+          jobSkill.includes(candidateSkill)
+        )
+      ).length;
+
+      let skillScore = 0;
+
+      if (jobSkills.length > 0) {
+        skillScore = matchCount / jobSkills.length;
+      }
+
+      // ==============================
+      // EXPERIENCE MATCH
+      // ==============================
+      const [expRows] = await db.query(
+        "SELECT COUNT(*) as total FROM experiences WHERE user_id = ?",
+        [userId]
+      );
+
+      const candidateExp = expRows[0]?.total || 0;
+
+      let expScore = 0;
+
+      if (requiredExp > 0) {
+        expScore = Math.min(candidateExp / requiredExp, 1);
+      }
+
+      // ==============================
+      // LOCATION MATCH
+      // ==============================
+      let wilayaScore = 0;
+
+      if (
+        app.location &&
+        jobWilaya &&
+        app.location.toLowerCase() === jobWilaya.toLowerCase()
+      ) {
+        wilayaScore = 1;
+      }
+
+      // ==============================
+      // FINAL SCORE
+      // ==============================
+      let totalScore =
+        (skillScore * 0.6) +
+        (expScore * 0.25) +
+        (wilayaScore * 0.15);
+
+      let finalScore = Math.round(totalScore * 100);
+
+      // 🔥 sécurité anti NaN
+      if (isNaN(finalScore)) {
+        finalScore = 0;
+      }
+
+      console.log("APPLICATION ID:", app.application_id);
+console.log("FINAL SCORE:", finalScore);
+
+      // 🔥 save score in database
+await db.query(
+  `
+  UPDATE applications
+  SET score = ?
+  WHERE id = ?
+  `,
+  [finalScore, app.application_id]
+);
+
+
+console.log("UPDATE RESULT:", updateResult);
+
+      // ==============================
+      // PUSH RESULT
+      // ==============================
+      results.push({
+        ...app,
+        score: finalScore
+      });
+    }
+
+    // ==============================
+    // SORT BY SCORE
+    // ==============================
+    results.sort((a, b) => b.score - a.score);
+
+    console.log("🔥 FINAL RESULTS:", results);
+
+    // ==============================
+    // RESPONSE
+    // ==============================
+    res.status(200).json({
+      applicants: results
+    });
 
   } catch (err) {
+
+    console.log("❌ ERROR:", err);
+
     res.status(500).json({
       message: "Erreur serveur",
       error: err.message
@@ -67,14 +231,15 @@ router.get("/:jobId", protect, authorize("recruiter"), async (req, res) => {
 
 
 // ==============================
-// UPDATE APPLICATION (shortlist / reject / score)
+// UPDATE APPLICATION
 // ==============================
 router.put("/:applicationId", protect, authorize("recruiter"), async (req, res) => {
   try {
+
     const applicationId = req.params.applicationId;
     const { status, score } = req.body;
 
-    // 🔍 Vérifier ownership (sécurité)
+    // 🔍 Vérifier ownership
     const [check] = await db.query(
       `
       SELECT applications.id 
@@ -91,7 +256,7 @@ router.put("/:applicationId", protect, authorize("recruiter"), async (req, res) 
       });
     }
 
-    // 🔄 Update application
+    // 🔄 Update
     await db.query(
       `
       UPDATE applications 
@@ -106,6 +271,7 @@ router.put("/:applicationId", protect, authorize("recruiter"), async (req, res) 
     });
 
   } catch (err) {
+
     res.status(500).json({
       message: "Erreur serveur",
       error: err.message
@@ -119,9 +285,10 @@ router.put("/:applicationId", protect, authorize("recruiter"), async (req, res) 
 // ==============================
 router.put("/:id/hire", protect, authorize("recruiter"), async (req, res) => {
   try {
+
     const appId = req.params.id;
 
-    // 🔍 vérifier ownership
+    // 🔍 ownership
     const [check] = await db.query(
       `
       SELECT applications.id 
@@ -138,7 +305,7 @@ router.put("/:id/hire", protect, authorize("recruiter"), async (req, res) => {
       });
     }
 
-    // 🔄 update status
+    // 🔄 update
     await db.query(
       "UPDATE applications SET status='hired', updated_at=NOW() WHERE id=?",
       [appId]
@@ -149,17 +316,20 @@ router.put("/:id/hire", protect, authorize("recruiter"), async (req, res) => {
     });
 
   } catch (err) {
+
     res.status(500).json({
       message: "Erreur serveur"
     });
   }
 });
 
+
 // ==============================
-// ADD NOTE TO APPLICATION
+// ADD NOTE
 // ==============================
 router.post("/:id/note", protect, authorize("recruiter"), async (req, res) => {
   try {
+
     const appId = req.params.id;
     const { note } = req.body;
 
@@ -176,6 +346,7 @@ router.post("/:id/note", protect, authorize("recruiter"), async (req, res) => {
     });
 
   } catch (err) {
+
     res.status(500).json({
       message: "Erreur serveur"
     });
@@ -184,10 +355,11 @@ router.post("/:id/note", protect, authorize("recruiter"), async (req, res) => {
 
 
 // ==============================
-// GET NOTES FOR APPLICATION
+// GET NOTES
 // ==============================
 router.get("/:id/notes", protect, authorize("recruiter"), async (req, res) => {
   try {
+
     const appId = req.params.id;
 
     const [notes] = await db.query(
@@ -199,9 +371,12 @@ router.get("/:id/notes", protect, authorize("recruiter"), async (req, res) => {
       [appId]
     );
 
-    res.status(200).json({ notes });
+    res.status(200).json({
+      notes
+    });
 
   } catch (err) {
+
     res.status(500).json({
       message: "Erreur serveur"
     });
@@ -209,12 +384,12 @@ router.get("/:id/notes", protect, authorize("recruiter"), async (req, res) => {
 });
 
 
-
 // ==============================
 // GET CV FILE
 // ==============================
 router.get("/:id/cv", protect, authorize("recruiter"), async (req, res) => {
   try {
+
     const appId = req.params.id;
 
     const [result] = await db.query(
@@ -238,6 +413,7 @@ router.get("/:id/cv", protect, authorize("recruiter"), async (req, res) => {
     res.download(filePath);
 
   } catch (err) {
+
     res.status(500).json({
       message: "Erreur serveur"
     });
@@ -250,6 +426,7 @@ router.get("/:id/cv", protect, authorize("recruiter"), async (req, res) => {
 // ==============================
 router.get("/details/:id", protect, authorize("recruiter"), async (req, res) => {
   try {
+
     const appId = req.params.id;
 
     const [application] = await db.query(
@@ -270,6 +447,7 @@ router.get("/details/:id", protect, authorize("recruiter"), async (req, res) => 
     });
 
   } catch (err) {
+
     res.status(500).json({
       message: "Erreur serveur"
     });
@@ -278,10 +456,11 @@ router.get("/details/:id", protect, authorize("recruiter"), async (req, res) => 
 
 
 // ==============================
-// COUNT APPLICANTS PER STATUS (tabs)
+// COUNT APPLICANTS
 // ==============================
 router.get("/counts/:jobId", protect, authorize("recruiter"), async (req, res) => {
   try {
+
     const jobId = req.params.jobId;
 
     const [counts] = await db.query(
@@ -296,13 +475,25 @@ router.get("/counts/:jobId", protect, authorize("recruiter"), async (req, res) =
       [jobId]
     );
 
-    res.status(200).json({ counts });
+    res.status(200).json({
+      counts
+    });
 
   } catch (err) {
+
     res.status(500).json({
       message: "Erreur serveur"
     });
   }
 });
+
+
+// ==============================
+// TEST ROUTE
+// ==============================
+router.get("/test", (req, res) => {
+  res.send("OK WORKING");
+});
+
 
 module.exports = router;

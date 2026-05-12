@@ -49,6 +49,14 @@ router.post("/", protect, authorize("candidate"), async (req, res) => {
       [req.user.id, visibility]
     );
 
+    await db.query(
+  "UPDATE candidate_profiles SET is_public = ? WHERE user_id = ?",
+  [
+    visibility === "public" ? 1 : 0,
+    req.user.id
+  ]
+);
+
     res.status(201).json({
       message: "Visibility créée avec succès",
       visibilityId: result.insertId
@@ -85,6 +93,14 @@ router.put("/", protect, authorize("candidate"), async (req, res) => {
       "UPDATE cv_visibility SET visibility = ? WHERE user_id = ?",
       [visibility, req.user.id]
     );
+
+    await db.query(
+  "UPDATE candidate_profiles SET is_public = ? WHERE user_id = ?",
+  [
+    visibility === "public" ? 1 : 0,
+    req.user.id
+  ]
+);
 
     res.status(200).json({ message: "Visibility mise à jour avec succès" });
   } catch (err) {

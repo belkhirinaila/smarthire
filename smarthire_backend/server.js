@@ -24,6 +24,7 @@ const savedJobsRoutes = require("./routes/savedJobs");
 const messagesRoutes = require("./routes/messages");
 const requestRoutes = require("./routes/requests");
 const notificationsRoutes = require("./routes/notifications");
+const aiscoreRoutes = require("./routes/aiScore");
 
 const recruiterJobsRoutes = require("./routes/recruiterJobs");
 const companyProfileRoutes = require("./routes/companyProfile");
@@ -32,6 +33,7 @@ const recruiterApplicationsRoutes = require("./routes/recruiterApplications");
 const recruiterDashboardRoutes = require("./routes/recruiterDashboard");
 const companySettingsRoutes = require("./routes/companySettings");  
 const companyVerificationRoutes = require("./routes/companyVerification");
+
 
 const adminDashboardRoutes = require("./routes/admin_dasshboad");
 const adminRoutes = require("./routes/admin");
@@ -118,15 +120,20 @@ app.use("/api/saved-jobs", savedJobsRoutes);
 app.use("/api/messages", messagesRoutes);
 app.use("/api/requests", requestRoutes);
 app.use("/api/notifications", notificationsRoutes);
+app.use("/api/ai-score", aiscoreRoutes);
+
 
 app.use("/api/recruiter/jobs", recruiterJobsRoutes);
 app.use("/api/recruiter/company-profile", companyProfileRoutes);
 app.use("/api/recruiter/candidates", recruiterCandidatesRoutes);
-app.use("/api/recruiter/applications", recruiterApplicationsRoutes);
+app.use("/api/recruiter/jobs", recruiterApplicationsRoutes);
+app.use("/api/recruiter/jobs", recruiterJobsRoutes);
 app.use("/api/recruiter/dashboard", recruiterDashboardRoutes);
 app.use("/api/recruiter/company-settings", companySettingsRoutes);
 app.use("/api/recruiter/company-verification", companyVerificationRoutes);
 app.use("/api/recruiter", recruiterCandidatesRoutes);
+app.use("/api/recruiter", recruiterApplicationsRoutes);
+app.use("/api/company-profile", companyProfileRoutes);
 
 
 

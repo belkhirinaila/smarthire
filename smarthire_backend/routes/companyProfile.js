@@ -2,6 +2,31 @@ const express = require("express");
 const router = express.Router();
 const db = require("../config/db");
 const { protect, authorize } = require("../middleware/authMiddleware");
+const multer = require("multer");
+const path = require("path");
+
+
+
+// ==============================
+// MULTER CONFIG
+// ==============================
+const storage = multer.diskStorage({
+
+  destination: (req, file, cb) => {
+    cb(null, "uploads/company");
+  },
+
+  filename: (req, file, cb) => {
+
+    cb(
+      null,
+      Date.now() +
+        path.extname(file.originalname)
+    );
+  },
+});
+
+const upload = multer({ storage });
 
 
 // ==============================
@@ -69,144 +94,303 @@ router.get("/me", protect, authorize("recruiter"), async (req, res) => {
 // ==============================
 // CREATE COMPANY PROFILE
 // ==============================
-router.post("/", protect, authorize("recruiter"), async (req, res) => {
-  try {
-    const {
-      name,
-      industry,
-      website,
-      description,
-      logo,
-      cover_image,
-      location,
-      company_size
-    } = req.body;
+router.post(
+  "/",
+  protect,
+  authorize("recruiter"),
 
-    // 🔍 vérifier si déjà existe
-    const [existing] = await db.query(
-      "SELECT id FROM company_profiles WHERE user_id = ?",
-      [req.user.id]
-    );
+  upload.fields([
+    { name: "logo", maxCount: 1 },
+    { name: "cover_image", maxCount: 1 },
+    { name: "registre_commerce", maxCount: 1 },
+    { name: "nif_nis", maxCount: 1 },
+    { name: "carte_fiscale", maxCount: 1 },
+  ]),
 
-    if (existing.length > 0) {
-      return res.status(409).json({
-        message: "Company déjà existante"
-      });
-    }
-
-    // 📝 insertion
-    const [result] = await db.query(
-      `
-      INSERT INTO company_profiles
-      (user_id, name, industry, website, description, logo, cover_image, location, company_size)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `,
-      [
-        req.user.id,
+  async (req, res) => {
+    try {
+      const {
         name,
         industry,
         website,
         description,
-        logo,
-        cover_image,
         location,
-        company_size
-      ]
-    );
+        company_size,
+      } = req.body;
 
-    res.status(201).json({
-      message: "Company créée avec succès",
-      companyId: result.insertId
-    });
+      let logo = null;
+      let cover_image = null;
+      let registre_commerce = null;
+      let nif_nis = null;
+      let carte_fiscale = null;
 
-  } catch (err) {
-    res.status(500).json({
-      message: "Erreur serveur",
-      error: err.message
-    });
+      if (req.files?.logo) {
+        logo = req.files.logo[0].path;
+      }
+
+      if (req.files?.cover_image) {
+        cover_image = req.files.cover_image[0].path;
+      }
+
+      if (req.files?.registre_commerce) {
+        registre_commerce = req.files.registre_commerce[0].path;
+      }
+
+      if (req.files?.nif_nis) {
+        nif_nis = req.files.nif_nis[0].path;
+      }
+
+      if (req.files?.carte_fiscale) {
+        carte_fiscale = req.files.carte_fiscale[0].path;
+      }
+
+      const [existing] = await db.query(
+        "SELECT id FROM company_profiles WHERE user_id = ?",
+        [req.user.id]
+      );
+
+      if (existing.length > 0) {
+        return res.status(409).json({
+          message: "Company déjà existante",
+        });
+      }
+
+      const [result] = await db.query(
+        `
+        INSERT INTO company_profiles
+        (
+          user_id,
+          name,
+          industry,
+          website,
+          description,
+          logo,
+          cover_image,
+          registre_commerce,
+          nif_nis,
+          carte_fiscale,
+          location,
+          company_size,
+          status
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+        `,
+        [
+          req.user.id,
+          name,
+          industry,
+          website,
+          description,
+          logo,
+          cover_image,
+          registre_commerce,
+          nif_nis,
+          carte_fiscale,
+          location,
+          company_size,
+        ]
+      );
+
+      res.status(201).json({
+        message: "Company created successfully",
+        companyId: result.insertId,
+      });
+    } catch (err) {
+      console.log(err);
+      res.status(500).json({
+        message: "Erreur serveur",
+        error: err.message,
+      });
+    }
   }
-});
+);
 
 
 // ==============================
 // UPDATE COMPANY PROFILE
 // ==============================
-router.put("/", protect, authorize("recruiter"), async (req, res) => {
-  try {
-    const {
-      name,
-      industry,
-      website,
-      description,
-      logo,
-      cover_image,
-      location,
-      company_size
-    } = req.body;
+router.put(
+  "/",
+  protect,
+  authorize("recruiter"),
 
-    // 🔍 vérifier existence
-    const [existing] = await db.query(
-      "SELECT id FROM company_profiles WHERE user_id = ?",
-      [req.user.id]
-    );
+  upload.fields([
+    { name: "logo", maxCount: 1 },
+    { name: "cover_image", maxCount: 1 },
+    { name: "registre_commerce", maxCount: 1 },
+    { name: "nif_nis", maxCount: 1 },
+    { name: "carte_fiscale", maxCount: 1 },
+  ]),
 
-    if (existing.length === 0) {
-      return res.status(404).json({
-        message: "Company non trouvée"
-      });
-    }
-
-    // 🔄 update
-    const [updateResult] = await db.query(
-      `
-      UPDATE company_profiles
-      SET
-        name = ?,
-        description = ?,
-        website = ?,
-        location = ?,
-        industry = ?,
-        company_size = ?
-      WHERE user_id = ?
-      `,
-      [
+  async (req, res) => {
+    try {
+      const {
         name,
-        description,
-        website,
-        location,
         industry,
+        website,
+        description,
+        location,
         company_size,
-        req.user.id
-      ]
-    );
+      } = req.body;
 
-    console.log("Company profile update result:", {
-      userId: req.user.id,
-      name,
-      description,
-      website,
-      location,
-      industry,
-      company_size,
-      affectedRows: updateResult.affectedRows
-    });
+      let logo = null;
+      let cover_image = null;
+      let registre_commerce = null;
+      let nif_nis = null;
+      let carte_fiscale = null;
 
-    if (updateResult.affectedRows === 0) {
-      return res.status(400).json({
-        message: "Aucune ligne mise à jour"
+      if (req.files?.logo) {
+        logo = req.files.logo[0].path;
+      }
+
+      if (req.files?.cover_image) {
+        cover_image = req.files.cover_image[0].path;
+      }
+
+      if (req.files?.registre_commerce) {
+        registre_commerce = req.files.registre_commerce[0].path;
+      }
+
+      if (req.files?.nif_nis) {
+        nif_nis = req.files.nif_nis[0].path;
+      }
+
+      if (req.files?.carte_fiscale) {
+        carte_fiscale = req.files.carte_fiscale[0].path;
+      }
+
+      const [existing] = await db.query(
+        "SELECT * FROM company_profiles WHERE user_id = ?",
+        [req.user.id]
+      );
+
+      if (existing.length === 0) {
+        return res.status(404).json({
+          message: "Company non trouvée",
+        });
+      }
+
+      const currentCompany = existing[0];
+
+      logo = logo || currentCompany.logo;
+      cover_image = cover_image || currentCompany.cover_image;
+      registre_commerce =
+        registre_commerce || currentCompany.registre_commerce;
+      nif_nis = nif_nis || currentCompany.nif_nis;
+      carte_fiscale = carte_fiscale || currentCompany.carte_fiscale;
+
+      await db.query(
+        `
+        UPDATE company_profiles
+        SET
+          name = ?,
+          industry = ?,
+          website = ?,
+          description = ?,
+          logo = ?,
+          cover_image = ?,
+          registre_commerce = ?,
+          nif_nis = ?,
+          carte_fiscale = ?,
+          location = ?,
+          company_size = ?
+        WHERE user_id = ?
+        `,
+        [
+          name,
+          industry,
+          website,
+          description,
+          logo,
+          cover_image,
+          registre_commerce,
+          nif_nis,
+          carte_fiscale,
+          location,
+          company_size,
+          req.user.id,
+        ]
+      );
+
+      res.status(200).json({
+        message: "Company updated successfully ✅",
+      });
+    } catch (err) {
+      console.log(err);
+      res.status(500).json({
+        message: "Erreur serveur",
+        error: err.message,
       });
     }
+  }
+);
+
+
+// ========================================
+// GET COMPANY PROFILE FOR CANDIDATE
+// ========================================
+router.get("/:id", async (req, res) => {
+
+  try {
+
+    const companyId = req.params.id;
+
+    const [rows] = await db.query(
+      `
+      SELECT
+
+        cp.*,
+
+        u.email
+
+      FROM company_profiles cp
+
+      LEFT JOIN users u
+        ON u.id = cp.user_id
+
+      WHERE cp.id = ?
+      `,
+      [companyId]
+    );
+
+    if (rows.length === 0) {
+
+      return res.status(404).json({
+        message: "Company not found"
+      });
+
+    }
+
+    // ========================================
+    // GET COMPANY JOBS COUNT
+    // ========================================
+    const [jobsCount] = await db.query(
+      `
+      SELECT COUNT(*) as totalJobs
+      FROM jobs
+      WHERE company_id = ?
+      `,
+      [companyId]
+    );
 
     res.status(200).json({
-      message: "Company mise à jour avec succès",
-      affectedRows: updateResult.affectedRows
+
+      company: {
+        ...rows[0],
+        total_jobs: jobsCount[0].totalJobs
+      }
+
     });
 
   } catch (err) {
+
+    console.log(err);
+
     res.status(500).json({
       message: "Erreur serveur",
       error: err.message
     });
+
   }
 });
 

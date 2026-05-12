@@ -18,70 +18,89 @@ class RecruiterJobDetailsScreenRecruiter extends StatefulWidget {
 
 class _RecruiterJobDetailsScreenRecruiterState
     extends State<RecruiterJobDetailsScreenRecruiter> {
-
   static const Color primaryBlue = Color(0xFF1E6CFF);
   static const Color background = Color(0xFF050A12);
   static const Color cardColor = Color(0xFF121C31);
+
+  static const String baseUrl = "http://192.168.100.47:5000/api";
+  static const String serverUrl = "http://192.168.100.47:5000";
 
   Map job = {};
   List applicants = [];
 
   bool isLoading = true;
-  late int? jobId;
+  late int jobId;
 
-  // ================= FETCH JOB =================
+  Color getScoreColor(int score) {
+    if (score >= 70) return Colors.green;
+    if (score >= 40) return Colors.orange;
+    return Colors.red;
+  }
+
+  String getImageUrl(dynamic path) {
+    if (path == null) return "";
+
+    final p = path.toString().trim();
+
+    if (p.isEmpty || p == "null" || p == "NULL") return "";
+    if (p.startsWith("http")) return p;
+    if (p.startsWith("/")) return "$serverUrl$p";
+
+    return "$serverUrl/$p";
+  }
+
+  List parseSkills(dynamic value) {
+    try {
+      if (value == null) return [];
+      if (value is List) return value;
+      return jsonDecode(value.toString()) as List;
+    } catch (_) {
+      return [];
+    }
+  }
+
   Future<void> fetchJob() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString("token");
 
     final res = await http.get(
-      Uri.parse("http://192.168.100.47:5000/api/recruiter/jobs/$jobId"),
+      Uri.parse("$baseUrl/recruiter/jobs/$jobId"),
       headers: {"Authorization": "Bearer $token"},
     );
 
     final data = jsonDecode(res.body);
 
     setState(() {
-      job = data["job"];
+      job = data["job"] ?? {};
       isLoading = false;
     });
   }
 
-  // ================= FETCH APPLICANTS =================
   Future<void> fetchApplicants() async {
-  final prefs = await SharedPreferences.getInstance();
-  final token = prefs.getString("token");
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString("token");
 
-  debugPrint("JOB ID: $jobId");
- debugPrint("TOKEN: $token");
- 
- 
-  final res = await http.get(
-    Uri.parse("http://192.168.100.47:5000/api/recruiter/jobs/$jobId/applicants"),
-    headers: {
-      "Authorization": "Bearer $token", // 🔥 الحل هنا
-    },
-  );
+    final res = await http.get(
+      Uri.parse("$baseUrl/recruiter/jobs/$jobId/applicants"),
+      headers: {"Authorization": "Bearer $token"},
+    );
 
-  debugPrint("RESPONSE: ${res.body}");
+    final data = jsonDecode(res.body);
 
-  final data = jsonDecode(res.body);
+    setState(() {
+      applicants = data["applicants"] ?? [];
+    });
+  }
 
-  setState(() {
-    applicants = data["applicants"] ?? [];
-  });
-}
-
-  // ================= PUBLISH =================
   Future<void> publishJob() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString("token");
 
     await http.put(
-      Uri.parse("http://192.168.100.47:5000/api/recruiter/jobs/${job["id"]}"),
+      Uri.parse("$baseUrl/recruiter/jobs/${job["id"]}"),
       headers: {
         "Authorization": "Bearer $token",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
       },
       body: jsonEncode({"status": "active"}),
     );
@@ -90,47 +109,40 @@ class _RecruiterJobDetailsScreenRecruiterState
   }
 
   @override
-   void initState() {
-   super.initState();
-
-   jobId = widget.jobId;
-
-   fetchJob();
-   fetchApplicants();
+  void initState() {
+    super.initState();
+    jobId = widget.jobId;
+    fetchJob();
+    fetchApplicants();
   }
 
-  // ================= UI =================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: background,
-
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : Column(
               children: [
-
-                // HEADER
                 Padding(
-                  padding: const EdgeInsets.only(
-                      top: 50, left: 16, right: 16),
+                  padding: const EdgeInsets.only(top: 50, left: 16, right: 16),
                   child: Row(
                     children: [
                       GestureDetector(
                         onTap: () => Navigator.pop(context),
-                        child: const Icon(Icons.arrow_back,
-                            color: Colors.white),
+                        child: const Icon(Icons.arrow_back, color: Colors.white),
                       ),
                       const SizedBox(width: 10),
-                      const Text("Job Details",
-                          style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold)),
-
+                      const Text(
+                        "Job Details",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                       const Spacer(),
-
-                      _statusBadge(job["status"]),
+                      _statusBadge(job["status"] ?? "draft"),
                     ],
                   ),
                 ),
@@ -139,50 +151,39 @@ class _RecruiterJobDetailsScreenRecruiterState
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.all(16),
                     child: Column(
-                      crossAxisAlignment:
-                          CrossAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-
-                        // CARD
                         Container(
                           padding: const EdgeInsets.all(20),
                           decoration: BoxDecoration(
                             color: cardColor,
-                            borderRadius:
-                                BorderRadius.circular(20),
+                            borderRadius: BorderRadius.circular(20),
                           ),
                           child: Column(
                             children: [
-
-                              const Icon(Icons.business,
-                                  size: 50,
-                                  color: Colors.white54),
-
+                              const Icon(
+                                Icons.business,
+                                size: 50,
+                                color: Colors.white54,
+                              ),
                               const SizedBox(height: 10),
-
                               Text(
                                 job["title"] ?? "",
                                 style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 20,
-                                    fontWeight:
-                                        FontWeight.bold),
+                                  color: Colors.white,
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
-
                               const SizedBox(height: 6),
-
                               Text(
                                 job["location"] ?? "",
-                                style: const TextStyle(
-                                    color: Colors.white54),
+                                style: const TextStyle(color: Colors.white54),
                               ),
-
                               const SizedBox(height: 10),
-
                               Text(
-                                "${job["salary_min"]} - ${job["salary_max"]} DZD",
-                                style: const TextStyle(
-                                    color: primaryBlue),
+                                "${job["salary_min"] ?? "-"} - ${job["salary_max"] ?? "-"} DZD",
+                                style: const TextStyle(color: primaryBlue),
                               ),
                             ],
                           ),
@@ -190,35 +191,38 @@ class _RecruiterJobDetailsScreenRecruiterState
 
                         const SizedBox(height: 20),
 
-                        // DESCRIPTION
-                        const Text("Description",
-                            style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold)),
+                        const Text(
+                          "Description",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
 
                         const SizedBox(height: 8),
 
                         Container(
+                          width: double.infinity,
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
                             color: cardColor,
-                            borderRadius:
-                                BorderRadius.circular(16),
+                            borderRadius: BorderRadius.circular(16),
                           ),
                           child: Text(
                             job["description"] ?? "",
-                            style: const TextStyle(
-                                color: Colors.white),
+                            style: const TextStyle(color: Colors.white),
                           ),
                         ),
 
                         const SizedBox(height: 20),
 
-                        // JOB INFO
-                        const Text("Job Info",
-                            style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold)),
+                        const Text(
+                          "Job Info",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
 
                         const SizedBox(height: 10),
 
@@ -226,58 +230,97 @@ class _RecruiterJobDetailsScreenRecruiterState
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
                             color: cardColor,
-                            borderRadius:
-                                BorderRadius.circular(16),
+                            borderRadius: BorderRadius.circular(16),
                           ),
                           child: Column(
                             children: [
                               _infoRow(Icons.work, "Type", job["type"] ?? "-"),
-                              _infoRow(Icons.location_on, "Mode", job["work_mode"] ?? "-"),
-                              _infoRow(Icons.category, "Category", job["category"] ?? "-"),
-                              _infoRow(Icons.business, "Company", job["company_name"] ?? "-"),
-                              _infoRow(Icons.access_time, "Posted", job["created_at"] ?? "-"),
+                              _infoRow(
+                                Icons.location_on,
+                                "Mode",
+                                job["work_mode"] ?? "-",
+                              ),
+                              _infoRow(
+                                Icons.category,
+                                "Category",
+                                job["category"] ?? "-",
+                              ),
+                              _infoRow(
+                                Icons.business,
+                                "Company",
+                                job["company_name"] ?? "-",
+                              ),
+                              _infoRow(
+                                Icons.access_time,
+                                "Posted",
+                                job["created_at"] ?? "-",
+                              ),
+                              _infoRow(
+                                Icons.work_history,
+                                "Experience",
+                                job["experience"]?.toString() ?? "-",
+                              ),
+                              _infoRow(
+                                Icons.school,
+                                "Education",
+                                job["education"] ?? "-",
+                              ),
+                              _infoRow(
+                                Icons.language,
+                                "Languages",
+                                job["languages"] ?? "-",
+                              ),
+                              _infoRow(
+                                Icons.groups,
+                                "Team",
+                                job["team"] ?? "-",
+                              ),
                             ],
                           ),
                         ),
 
                         const SizedBox(height: 20),
 
-                        // SKILLS
-                        const Text("Skills",
-                            style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold)),
+                        const Text(
+                          "Skills",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
 
                         const SizedBox(height: 10),
 
                         Wrap(
                           spacing: 8,
-                          children: (job["skills"] != null)
-                              ? List.generate(
-                                  (jsonDecode(job["skills"]) as List).length,
-                                  (i) => Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 12, vertical: 6),
-                                    decoration: BoxDecoration(
-                                      color: primaryBlue.withOpacity(0.2),
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
-                                    child: Text(
-                                      jsonDecode(job["skills"])[i],
-                                      style: const TextStyle(color: Colors.white),
-                                    ),
-                                  ),
-                                )
-                              : [],
+                          runSpacing: 8,
+                          children: parseSkills(job["skills"]).map((skill) {
+                            return Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: primaryBlue.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                skill.toString(),
+                                style: const TextStyle(color: Colors.white),
+                              ),
+                            );
+                          }).toList(),
                         ),
 
                         const SizedBox(height: 20),
 
-                        // ================= APPLICANTS =================
-                        const Text("Applicants",
-                            style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold)),
+                        const Text(
+                          "Applicants",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
 
                         const SizedBox(height: 10),
 
@@ -293,15 +336,25 @@ class _RecruiterJobDetailsScreenRecruiterState
                                 itemBuilder: (context, index) {
                                   final c = applicants[index];
 
+                                  final String photoUrl =
+                                      getImageUrl(c["profile_image"]);
+
+                                  final int score = int.tryParse(
+                                        c["score"]?.toString() ?? "0",
+                                      ) ??
+                                      0;
+
                                   return GestureDetector(
                                     onTap: () {
                                       Navigator.pushNamed(
                                         context,
                                         "/candidate-profile-recruiter",
-                                        arguments: {"userId": c["user_id"]},
+                                        arguments: {
+                                          "userId": c["candidate_id"] ??
+                                              c["user_id"],
+                                        },
                                       );
                                     },
-
                                     child: Container(
                                       margin: const EdgeInsets.only(bottom: 12),
                                       padding: const EdgeInsets.all(14),
@@ -313,21 +366,22 @@ class _RecruiterJobDetailsScreenRecruiterState
                                         crossAxisAlignment:
                                             CrossAxisAlignment.start,
                                         children: [
-
                                           Row(
                                             children: [
-
                                               CircleAvatar(
                                                 radius: 25,
+                                                backgroundColor: Colors.white
+                                                    .withOpacity(0.08),
                                                 backgroundImage:
-                                                    c["profile_image"] != null
-                                                        ? NetworkImage(
-                                                            "http://192.168.100.47:5000/uploads/${c["profile_image"]}")
+                                                    photoUrl.isNotEmpty
+                                                        ? NetworkImage(photoUrl)
                                                         : null,
-                                                child:
-                                                    c["profile_image"] == null
-                                                        ? const Icon(Icons.person)
-                                                        : null,
+                                                child: photoUrl.isEmpty
+                                                    ? const Icon(
+                                                        Icons.person,
+                                                        color: Colors.white54,
+                                                      )
+                                                    : null,
                                               ),
 
                                               const SizedBox(width: 10),
@@ -337,21 +391,67 @@ class _RecruiterJobDetailsScreenRecruiterState
                                                   crossAxisAlignment:
                                                       CrossAxisAlignment.start,
                                                   children: [
-
-                                                    Text(
-                                                      c["full_name"] ?? "",
-                                                      style:
-                                                          const TextStyle(
+                                                    Row(
+                                                      children: [
+                                                        Expanded(
+                                                          child: Text(
+                                                            c["full_name"] ??
+                                                                "Candidate",
+                                                            style:
+                                                                const TextStyle(
                                                               color:
                                                                   Colors.white,
                                                               fontWeight:
-                                                                  FontWeight.bold),
+                                                                  FontWeight
+                                                                      .bold,
+                                                            ),
+                                                          ),
+                                                        ),
+
+                                                        if (c["score"] != null)
+                                                          Container(
+                                                            padding:
+                                                                const EdgeInsets
+                                                                    .symmetric(
+                                                              horizontal: 10,
+                                                              vertical: 4,
+                                                            ),
+                                                            decoration:
+                                                                BoxDecoration(
+                                                              color:
+                                                                  getScoreColor(
+                                                                          score)
+                                                                      .withOpacity(
+                                                                          0.2),
+                                                              borderRadius:
+                                                                  BorderRadius
+                                                                      .circular(
+                                                                          20),
+                                                            ),
+                                                            child: Text(
+                                                              "$score%",
+                                                              style: TextStyle(
+                                                                color:
+                                                                    getScoreColor(
+                                                                        score),
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .bold,
+                                                              ),
+                                                            ),
+                                                          ),
+                                                      ],
                                                     ),
 
+                                                    const SizedBox(height: 4),
+
                                                     Text(
-                                                      c["title"] ?? "",
+                                                      c["professional_headline"] ??
+                                                          c["title"] ??
+                                                          "",
                                                       style: const TextStyle(
-                                                          color: Colors.blue),
+                                                        color: Colors.blue,
+                                                      ),
                                                     ),
 
                                                     const SizedBox(height: 4),
@@ -359,16 +459,18 @@ class _RecruiterJobDetailsScreenRecruiterState
                                                     Text(
                                                       c["location"] ?? "",
                                                       style: const TextStyle(
-                                                          color:
-                                                              Colors.white54),
+                                                        color: Colors.white54,
+                                                      ),
                                                     ),
                                                   ],
                                                 ),
                                               ),
 
-                                              const Icon(Icons.circle,
-                                                  color: Colors.green,
-                                                  size: 10),
+                                              const Icon(
+                                                Icons.circle,
+                                                color: Colors.green,
+                                                size: 10,
+                                              ),
                                             ],
                                           ),
 
@@ -376,49 +478,52 @@ class _RecruiterJobDetailsScreenRecruiterState
 
                                           Wrap(
                                             spacing: 6,
-                                            children: (c["skills"] != null)
-                                                ? List.generate(
-                                                    (jsonDecode(c["skills"])
-                                                            as List)
-                                                        .length,
-                                                    (i) => Container(
-                                                      padding:
-                                                          const EdgeInsets
-                                                                  .symmetric(
-                                                              horizontal: 10,
-                                                              vertical: 4),
-                                                      decoration:
-                                                          BoxDecoration(
-                                                        color: primaryBlue
-                                                            .withOpacity(0.2),
-                                                        borderRadius:
-                                                            BorderRadius
-                                                                .circular(20),
-                                                      ),
-                                                      child: Text(
-                                                        jsonDecode(c["skills"])[i],
-                                                        style:
-                                                            const TextStyle(
-                                                                color: Colors.white),
-                                                      ),
+                                            runSpacing: 6,
+                                            children:
+                                                parseSkills(c["skills"]).map(
+                                              (skill) {
+                                                return Container(
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
+                                                    horizontal: 10,
+                                                    vertical: 4,
+                                                  ),
+                                                  decoration: BoxDecoration(
+                                                    color: primaryBlue
+                                                        .withOpacity(0.2),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            20),
+                                                  ),
+                                                  child: Text(
+                                                    skill.toString(),
+                                                    style: const TextStyle(
+                                                      color: Colors.white,
                                                     ),
-                                                  )
-                                                : [],
+                                                  ),
+                                                );
+                                              },
+                                            ).toList(),
                                           ),
 
                                           const SizedBox(height: 10),
 
                                           Row(
                                             children: [
-
                                               if (c["is_public"] == 1)
-                                                const Text("Public CV",
-                                                    style: TextStyle(
-                                                        color: Colors.green))
+                                                const Text(
+                                                  "Public CV",
+                                                  style: TextStyle(
+                                                    color: Colors.green,
+                                                  ),
+                                                )
                                               else
-                                                const Text("Private CV",
-                                                    style: TextStyle(
-                                                        color: Colors.orange)),
+                                                const Text(
+                                                  "Private CV",
+                                                  style: TextStyle(
+                                                    color: Colors.orange,
+                                                  ),
+                                                ),
 
                                               const Spacer(),
 
@@ -428,15 +533,17 @@ class _RecruiterJobDetailsScreenRecruiterState
                                                     context,
                                                     "/candidate-profile-recruiter",
                                                     arguments: {
-                                                      "userId": c["user_id"]
+                                                      "userId":
+                                                          c["candidate_id"] ??
+                                                              c["user_id"],
                                                     },
                                                   );
                                                 },
                                                 child:
                                                     const Text("View Profile"),
-                                              )
+                                              ),
                                             ],
-                                          )
+                                          ),
                                         ],
                                       ),
                                     ),
@@ -451,13 +558,12 @@ class _RecruiterJobDetailsScreenRecruiterState
                 Padding(
                   padding: const EdgeInsets.all(16),
                   child: _buildBottomButton(),
-                )
+                ),
               ],
             ),
     );
   }
 
-  // ================= STATUS =================
   Widget _statusBadge(String status) {
     Color color;
 
@@ -470,8 +576,7 @@ class _RecruiterJobDetailsScreenRecruiterState
     }
 
     return Container(
-      padding:
-          const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         color: color.withOpacity(0.2),
         borderRadius: BorderRadius.circular(12),
@@ -483,13 +588,10 @@ class _RecruiterJobDetailsScreenRecruiterState
     );
   }
 
-  // ================= BUTTON =================
   Widget _buildBottomButton() {
-
     if (job["status"] == "draft") {
       return Row(
         children: [
-
           Expanded(
             child: _button("Edit", () async {
               final result = await Navigator.pushNamed(
@@ -503,9 +605,7 @@ class _RecruiterJobDetailsScreenRecruiterState
               }
             }),
           ),
-
           const SizedBox(width: 10),
-
           Expanded(
             child: _button("Publish", publishJob),
           ),
@@ -514,9 +614,16 @@ class _RecruiterJobDetailsScreenRecruiterState
     }
 
     if (job["status"] == "active") {
-      return _button("Edit Job", () {
-        Navigator.pushNamed(context, "/edit-job",
-            arguments: {"job": job});
+      return _button("Edit Job", () async {
+        final result = await Navigator.pushNamed(
+          context,
+          "/edit-job",
+          arguments: {"job": job},
+        );
+
+        if (result == true) {
+          fetchJob();
+        }
       });
     }
 
@@ -528,8 +635,7 @@ class _RecruiterJobDetailsScreenRecruiterState
       onTap: onTap,
       child: Container(
         width: double.infinity,
-        padding:
-            const EdgeInsets.symmetric(vertical: 16),
+        padding: const EdgeInsets.symmetric(vertical: 16),
         decoration: BoxDecoration(
           color: primaryBlue,
           borderRadius: BorderRadius.circular(16),
@@ -538,8 +644,9 @@ class _RecruiterJobDetailsScreenRecruiterState
           child: Text(
             text,
             style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold),
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ),
       ),
@@ -553,10 +660,16 @@ class _RecruiterJobDetailsScreenRecruiterState
         children: [
           Icon(icon, color: Colors.white54, size: 18),
           const SizedBox(width: 8),
-          Text("$title: ",
-              style: const TextStyle(color: Colors.white54)),
-          Text(value,
-              style: const TextStyle(color: Colors.white)),
+          Text(
+            "$title: ",
+            style: const TextStyle(color: Colors.white54),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(color: Colors.white),
+            ),
+          ),
         ],
       ),
     );

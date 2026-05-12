@@ -11,7 +11,6 @@ class AdminJobsScreen extends StatefulWidget {
 }
 
 class _AdminJobsScreenState extends State<AdminJobsScreen> {
-
   static const Color primaryBlue = Color(0xFF1E6CFF);
   static const Color backgroundTop = Color(0xFF08162D);
   static const Color backgroundBottom = Color(0xFF050A12);
@@ -42,9 +41,15 @@ class _AdminJobsScreenState extends State<AdminJobsScreen> {
       headers: {'Authorization': 'Bearer $token'},
     );
 
+    if (!mounted) return;
+
     if (res.statusCode == 200) {
       setState(() {
         jobs = jsonDecode(res.body);
+        isLoading = false;
+      });
+    } else {
+      setState(() {
         isLoading = false;
       });
     }
@@ -66,80 +71,116 @@ class _AdminJobsScreenState extends State<AdminJobsScreen> {
   Widget build(BuildContext context) {
 
     if (isLoading) {
-      return const Scaffold(
-        backgroundColor: backgroundBottom,
-        body: Center(child: CircularProgressIndicator()),
+      return const Center(
+        child: CircularProgressIndicator(),
       );
     }
 
-    return Scaffold(
-      backgroundColor: backgroundBottom,
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [backgroundTop, backgroundBottom],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-          ),
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [backgroundTop, backgroundBottom],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
         ),
-        child: SafeArea(
-          child: RefreshIndicator(
-            onRefresh: loadJobs,
-            child: ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: jobs.length,
-              itemBuilder: (context, i) {
-                final job = jobs[i];
+      ),
 
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: cardColor,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Row(
-                    children: [
+      child: SafeArea(
+        child: RefreshIndicator(
+          onRefresh: loadJobs,
 
-                      /// 🧾 ICON
-                      const CircleAvatar(
-                        backgroundColor: primaryBlue,
-                        child: Icon(Icons.work, color: Colors.white),
-                      ),
+          child: jobs.isEmpty
+              ? ListView(
+                  children: const [
+                    SizedBox(height: 250),
 
-                      const SizedBox(width: 10),
-
-                      /// 📄 JOB INFO
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              job['title'] ?? "No title",
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            Text(
-                              job['recruiter_email'] ?? "",
-                              style: const TextStyle(color: Colors.white54),
-                            ),
-                          ],
+                    Center(
+                      child: Text(
+                        "📭 No jobs found",
+                        style: TextStyle(
+                          color: Colors.white54,
                         ),
                       ),
+                    ),
+                  ],
+                )
 
-                      /// ❌ DELETE BUTTON
-                      IconButton(
-                        icon: const Icon(Icons.delete, color: Colors.red),
-                        onPressed: () => deleteJob(job['id']),
+              : ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: jobs.length,
+
+                  itemBuilder: (context, i) {
+                    final job = jobs[i];
+
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.all(14),
+
+                      decoration: BoxDecoration(
+                        color: cardColor,
+                        borderRadius: BorderRadius.circular(16),
                       ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
+
+                      child: Row(
+                        children: [
+
+                          /// 🧾 ICON
+                          const CircleAvatar(
+                            backgroundColor: primaryBlue,
+                            child: Icon(
+                              Icons.work,
+                              color: Colors.white,
+                            ),
+                          ),
+
+                          const SizedBox(width: 10),
+
+                          /// 📄 JOB INFO
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment:
+                                  CrossAxisAlignment.start,
+
+                              children: [
+
+                                Text(
+                                  job['title'] ?? "No title",
+
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+
+                                const SizedBox(height: 4),
+
+                                Text(
+                                  job['recruiter_email'] ?? "",
+
+                                  style: const TextStyle(
+                                    color: Colors.white54,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
+                          /// ❌ DELETE BUTTON
+                          IconButton(
+                            icon: const Icon(
+                              Icons.delete,
+                              color: Colors.red,
+                            ),
+
+                            onPressed: () {
+                              deleteJob(job['id']);
+                            },
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
         ),
       ),
     );

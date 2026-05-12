@@ -1,0 +1,10 @@
+node_modules
+.vscode
+.env
+
+smarthire_backend/uploads
+smarthire_backend/node_modules
+
+smarthire_app/build
+smarthire_app/.dart_tool
+smarthire_app/.idea

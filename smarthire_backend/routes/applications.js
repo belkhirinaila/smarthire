@@ -119,25 +119,29 @@ if (jobs[0].recruiter_id !== req.user.id) {
 
     const [applicants] = await db.query(
    `
-   SELECT 
-    applications.id,
-    applications.status,
-    applications.created_at,
-    users.id AS candidate_id,
-    users.full_name,
-    users.email,
-    candidate_profiles.professional_headline,
-    candidate_profiles.location,
-    candidate_profiles.bio,
-    candidate_profiles.github_link,
-    candidate_profiles.behance_link,
-    candidate_profiles.personal_website,
-    candidate_profiles.profile_photo
-  FROM applications
-  JOIN users ON applications.candidate_id = users.id
-  LEFT JOIN candidate_profiles ON users.id = candidate_profiles.user_id
-  WHERE applications.job_id = ?
-  ORDER BY applications.created_at DESC
+    SELECT
+        a.*,
+        u.id AS candidate_id,
+        u.full_name,
+        u.email,
+        cp.professional_headline,
+        cp.location,
+        cp.phone_number,
+        cp.profile_photo,
+        cp.cv_generated,
+        CASE 
+          WHEN fa.id IS NULL THEN 0
+          ELSE 1
+        END AS is_favorite
+      FROM applications a
+      JOIN users u ON u.id = a.candidate_id
+      LEFT JOIN candidate_profiles cp ON cp.user_id = u.id
+      LEFT JOIN favorite_applicants fa
+        ON fa.candidate_id = u.id
+        AND fa.job_id = a.job_id
+        AND fa.recruiter_id = ?
+      WHERE a.job_id = ?
+      ORDER BY a.created_at DESC
   `,
   [jobId]
 );
@@ -208,6 +212,77 @@ router.get("/:id", protect, authorize("candidate"), async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ message: "Erreur serveur", error: err.message });
+  }
+});
+
+
+
+
+//favorite applicants
+router.post("/favorites/applicant", protect, async (req, res) => {
+  try {
+    const { candidate_id, job_id } = req.body;
+    const recruiterId = req.user.id;
+
+    if (!candidate_id || !job_id) {
+      return res.status(400).json({
+        message: "candidate_id et job_id sont obligatoires",
+      });
+    }
+
+    await db.query(
+      `
+      INSERT IGNORE INTO favorite_applicants
+      (recruiter_id, candidate_id, job_id)
+      VALUES (?, ?, ?)
+      `,
+      [recruiterId, candidate_id, job_id]
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Applicant added to favorites",
+    });
+  } catch (err) {
+    console.error("ADD FAVORITE ERROR:", err);
+    res.status(500).json({
+      message: "Erreur serveur",
+      error: err.message,
+    });
+  }
+});
+
+router.delete("/favorites/applicant", protect, async (req, res) => {
+  try {
+    const { candidate_id, job_id } = req.body;
+    const recruiterId = req.user.id;
+
+    if (!candidate_id || !job_id) {
+      return res.status(400).json({
+        message: "candidate_id et job_id sont obligatoires",
+      });
+    }
+
+    await db.query(
+      `
+      DELETE FROM favorite_applicants
+      WHERE recruiter_id = ?
+      AND candidate_id = ?
+      AND job_id = ?
+      `,
+      [recruiterId, candidate_id, job_id]
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Applicant removed from favorites",
+    });
+  } catch (err) {
+    console.error("REMOVE FAVORITE ERROR:", err);
+    res.status(500).json({
+      message: "Erreur serveur",
+      error: err.message,
+    });
   }
 });
 module.exports = router;

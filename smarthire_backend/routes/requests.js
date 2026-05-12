@@ -120,17 +120,29 @@ router.get("/received", protect, authorize("candidate"), async (req, res) => {
     const candidate_id = req.user.id;
 
     const [rows] = await db.query(
-      `
-      SELECT 
-        access_requests.*,
-        users.full_name
-      FROM access_requests
-      JOIN users ON users.id = access_requests.recruiter_id
-      WHERE candidate_id = ?
-      ORDER BY created_at DESC
-      `,
-      [candidate_id]
-    );
+  `
+  SELECT 
+    access_requests.*,
+
+    users.full_name,
+
+    company_profiles.name as company_name,
+    company_profiles.logo as company_logo
+
+  FROM access_requests
+
+  JOIN users 
+    ON users.id = access_requests.recruiter_id
+
+  LEFT JOIN company_profiles
+    ON company_profiles.user_id = users.id
+
+  WHERE candidate_id = ?
+
+  ORDER BY created_at DESC
+  `,
+  [candidate_id]
+);
 
     res.status(200).json({
       count: rows.length,

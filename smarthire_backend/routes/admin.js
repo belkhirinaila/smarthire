@@ -44,7 +44,93 @@ router.post("/create-admin", async (req, res) => {
 }); */
 
 
+// ==============================
+// 🔐 ADMIN CHANGE PASSWORD
+// ==============================
+router.put(
+  "/change-password",
+  protect,
+  authorize("admin"),
+  async (req, res) => {
 
+    try {
+
+      const adminId = req.user.id;
+
+      const {
+        oldPassword,
+        newPassword,
+      } = req.body;
+
+      if (
+        !oldPassword ||
+        !newPassword
+      ) {
+
+        return res.status(400).json({
+          message:
+              "Tous les champs sont obligatoires",
+        });
+      }
+
+      /// 🔍 GET ADMIN
+      const [users] = await db.query(
+        "SELECT * FROM users WHERE id = ?",
+        [adminId]
+      );
+
+      if (users.length === 0) {
+
+        return res.status(404).json({
+          message: "Admin introuvable",
+        });
+      }
+
+      const admin = users[0];
+
+      /// 🔐 CHECK OLD PASSWORD
+      const isMatch =
+          await bcrypt.compare(
+        oldPassword,
+        admin.password,
+      );
+
+      if (!isMatch) {
+
+        return res.status(400).json({
+          message:
+              "Ancien mot de passe incorrect",
+        });
+      }
+
+      /// 🔥 HASH NEW PASSWORD
+      const hashedPassword =
+          await bcrypt.hash(
+        newPassword,
+        10,
+      );
+
+      /// 💾 UPDATE
+      await db.query(
+        "UPDATE users SET password = ? WHERE id = ?",
+        [hashedPassword, adminId]
+      );
+
+      res.json({
+        message:
+            "password modified successfully ",
+      });
+
+    } catch (error) {
+
+      console.error(error);
+
+      res.status(500).json({
+        message: "Erreur serveur",
+      });
+    }
+  }
+);
 
 // ==============================
 // 👥 GET ALL USERS
@@ -80,6 +166,63 @@ router.delete("/users/:id", protect, authorize("admin"), async (req, res) => {
   }
 });
 
+
+
+// ==============================
+// 👤 GET CANDIDATES ONLY
+// ==============================
+router.get(
+  "/candidates",
+  protect,
+  authorize("admin"),
+  async (req, res) => {
+
+    try {
+
+      const [candidates] = await db.query(`
+        SELECT
+
+          u.id,
+          u.full_name,
+          u.email,
+          u.role,
+          u.is_blocked,
+          u.created_at,
+
+          cp.id AS profile_id,
+          cp.profile_photo,
+          cp.professional_headline,
+          cp.location,
+          cp.bio,
+          cp.github_link,
+          cp.behance_link,
+          cp.personal_website,
+          cp.phone_number,
+          cp.email AS profile_email
+
+        FROM users u
+
+        INNER JOIN candidate_profiles cp
+          ON cp.user_id = u.id
+
+        WHERE u.role = 'candidate'
+
+        ORDER BY u.created_at DESC
+      `);
+
+      res.json(candidates);
+
+    } catch (error) {
+
+      console.error(error);
+
+      res.status(500).json({
+        message: "Erreur serveur",
+      });
+    }
+  }
+);
+
 // ==============================
 // 🚫 BLOCK / UNBLOCK USER
 // ==============================
@@ -94,6 +237,90 @@ router.put("/users/:id/block", protect, authorize("admin"), async (req, res) => 
     );
 
     res.json({ message: "User status updated ✅" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+});
+
+
+router.put(
+  "/companies/:id/unblock",
+  protect,
+  authorize("admin"),
+
+  async (req, res) => {
+
+    try {
+
+      const companyId = req.params.id;
+
+      const [companies] = await db.query(
+        "SELECT user_id FROM company_profiles WHERE id = ?",
+        [companyId]
+      );
+
+      if (companies.length === 0) {
+        return res.status(404).json({
+          message: "Company introuvable",
+        });
+      }
+
+      const recruiterUserId =
+          companies[0].user_id;
+
+      await db.query(
+        "UPDATE company_profiles SET is_blocked = 0 WHERE id = ?",
+        [companyId]
+      );
+
+      await db.query(
+        "UPDATE users SET is_blocked = 0 WHERE id = ?",
+        [recruiterUserId]
+      );
+
+      res.json({
+        message:
+            "Company unblocked ✅",
+      });
+
+    } catch (error) {
+
+      console.error(error);
+
+      res.status(500).json({
+        message: "Erreur serveur",
+      });
+    }
+  }
+);
+
+router.put("/companies/:id/block", protect, authorize("admin"), async (req, res) => {
+  try {
+    const companyId = req.params.id;
+
+    const [companies] = await db.query(
+      "SELECT user_id FROM company_profiles WHERE id = ?",
+      [companyId]
+    );
+
+    if (companies.length === 0) {
+      return res.status(404).json({ message: "Company introuvable" });
+    }
+
+    const recruiterUserId = companies[0].user_id;
+
+    await db.query(
+      "UPDATE company_profiles SET is_blocked = 1 WHERE id = ?",
+      [companyId]
+    );
+
+    await db.query(
+      "UPDATE users SET is_blocked = 1 WHERE id = ?",
+      [recruiterUserId]
+    );
+
+    res.json({ message: "Company and recruiter blocked ✅" });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Erreur serveur" });
@@ -262,6 +489,45 @@ router.get("/jobs/blocked", protect, authorize("admin"), async (req, res) => {
     `);
 
     res.json(jobs);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+});
+
+// ==============================
+// 🚫 GET BLOCKED COMPANIES
+// ==============================
+router.get("/companies/blocked", protect, authorize("admin"), async (req, res) => {
+  try {
+    const [companies] = await db.query(`
+      SELECT *
+      FROM company_profiles
+      WHERE is_blocked = 1
+      ORDER BY created_at DESC
+    `);
+
+    res.json(companies);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+});
+
+
+// ==============================
+// 🔓 UNBLOCK COMPANY
+// ==============================
+router.put("/companies/:id/unblock", protect, authorize("admin"), async (req, res) => {
+  try {
+    const companyId = req.params.id;
+
+    await db.query(
+      "UPDATE company_profiles SET is_blocked = 0 WHERE id = ?",
+      [companyId]
+    );
+
+    res.json({ message: "Company unblocked ✅" });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Erreur serveur" });

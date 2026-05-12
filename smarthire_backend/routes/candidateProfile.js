@@ -49,7 +49,7 @@ router.post("/", protect, authorize("candidate"), async (req, res) => {
     const [result] = await db.query(
       `INSERT INTO candidate_profiles 
       (user_id, professional_headline, location, bio, github_link, behance_link, personal_website, profile_photo, phone_number, email)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         req.user.id,
         professional_headline,
@@ -119,6 +119,71 @@ router.put("/", protect, authorize("candidate"), async (req, res) => {
     res.status(200).json({ message: "Profil mis à jour avec succès" });
   } catch (err) {
     res.status(500).json({ message: "Erreur serveur", error: err.message });
+  }
+});
+
+
+
+// ==============================
+// CHANGE PASSWORD
+// ==============================
+router.put("/change-password", protect, async (req, res) => {
+  try {
+    const { oldPassword, newPassword } = req.body;
+
+    if (!oldPassword || !newPassword) {
+      return res.status(400).json({
+        message: "Tous les champs sont obligatoires",
+      });
+    }
+
+    const [users] = await db.query(
+      "SELECT * FROM users WHERE id = ?",
+      [req.user.id]
+    );
+
+    if (users.length === 0) {
+      return res.status(404).json({
+        message: "Utilisateur introuvable",
+      });
+    }
+
+    const user = users[0];
+
+    const isMatch = await bcrypt.compare(
+      oldPassword,
+      user.password
+    );
+
+    if (!isMatch) {
+      return res.status(400).json({
+        message: "Ancien mot de passe incorrect",
+      });
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    await db.query(
+      `
+      UPDATE users
+      SET password = ?
+      WHERE id = ?
+      `,
+      [hashedPassword, req.user.id]
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Mot de passe modifié avec succès",
+    });
+
+  } catch (error) {
+    console.error("CHANGE PASSWORD ERROR:", error);
+
+    res.status(500).json({
+      message: "Erreur serveur",
+      error: error.message,
+    });
   }
 });
 
