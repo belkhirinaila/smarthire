@@ -64,7 +64,7 @@ class _CreateJobScreenState extends State<CreateJobScreen> {
     final token = prefs.getString("token");
 
     final res = await http.post(
-      Uri.parse("http://192.168.100.47:5000/api/recruiter/jobs"),
+      Uri.parse("https://smarthire-1-xe6v.onrender.com/api/recruiter/jobs"),
       headers: {
         "Authorization": "Bearer $token",
         "Content-Type": "application/json"

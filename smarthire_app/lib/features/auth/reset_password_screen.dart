@@ -50,7 +50,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     try {
       // Envoi d'une requête POST au backend avec l'email de l'utilisateur.
       final response = await http.post(
-        Uri.parse("http://192.168.100.47:5000/api/auth/forgot-password"),
+        Uri.parse("https://smarthire-1-xe6v.onrender.com/api/auth/forgot-password"),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
           "email": email,

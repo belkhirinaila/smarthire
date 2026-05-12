@@ -22,7 +22,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
   static const Color chipColor = Color(0xFF18233A);
 
   // URL de base vers l'API backend.
-  static const String baseUrl = 'http://192.168.100.47:5000/api';
+  static const String baseUrl = 'https://smarthire-1-xe6v.onrender.com/api';
 
   // Données des offres et version filtrée pour l'affichage.
   List<dynamic> allJobs = [];
@@ -159,7 +159,7 @@ class _CandidateHomeScreenState extends State<CandidateHomeScreen> {
 
       if (photo != null && photo.isNotEmpty) {
       dynamicProfilePhoto =
-       "http://192.168.100.47:5000/" + photo;
+       "https://smarthire-1-xe6v.onrender.com/" + photo;
 }
       });
     }

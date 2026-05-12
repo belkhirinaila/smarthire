@@ -26,7 +26,7 @@ class _SavedJobsScreenState extends State<SavedJobsScreen> {
   static const Color cardColor = Color(0xFF121C31);
 
   // URL de base du backend pour les requêtes d'offres sauvegardées.
-  static const String baseUrl = 'http://192.168.100.47:5000/api';
+  static const String baseUrl = 'https://smarthire-1-xe6v.onrender.com/api';
 
   // Liste des offres sauvegardées récupérées depuis le serveur.
   List<dynamic> jobs = [];

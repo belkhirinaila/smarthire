@@ -27,7 +27,7 @@ class _RecruiterJobsScreenState extends State<RecruiterJobsScreen> {
     final token = prefs.getString("token");
 
     final res = await http.get(
-      Uri.parse("http://192.168.100.47:5000/api/recruiter/jobs/my"),
+      Uri.parse("https://smarthire-1-xe6v.onrender.com/api/recruiter/jobs/my"),
       headers: {"Authorization": "Bearer $token"},
     );
 
@@ -65,7 +65,7 @@ class _RecruiterJobsScreenState extends State<RecruiterJobsScreen> {
     final token = prefs.getString("token");
 
     await http.delete(
-      Uri.parse("http://192.168.100.47:5000/api/recruiter/jobs/$id"),
+      Uri.parse("https://smarthire-1-xe6v.onrender.com/api/recruiter/jobs/$id"),
       headers: {"Authorization": "Bearer $token"},
     );
 

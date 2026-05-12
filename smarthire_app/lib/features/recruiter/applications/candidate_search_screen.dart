@@ -33,7 +33,7 @@ class _CandidateSearchScreenState extends State<CandidateSearchScreen> {
 
     final res = await http.get(
       Uri.parse(
-        "http://192.168.100.47:5000/api/recruiter/candidates?skill=$skill&location=$location",
+        "https://smarthire-1-xe6v.onrender.com/api/recruiter/candidates?skill=$skill&location=$location",
       ),
       headers: {"Authorization": "Bearer $token"},
     );

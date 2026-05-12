@@ -26,7 +26,7 @@ class _ApplicationsListScreenState extends State<ApplicationsListScreen> {
   static const Color cardColor = Color(0xFF121C31);
 
   // URL de base de l'API utilisée pour charger les candidatures.
-  static const String baseUrl = 'http://192.168.100.47:5000/api';
+  static const String baseUrl = 'https://smarthire-1-xe6v.onrender.com/api';
 
   // Index de l'onglet sélectionné pour filtrer les candidatures.
   int selectedTabIndex = 0;

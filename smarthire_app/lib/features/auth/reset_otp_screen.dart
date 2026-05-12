@@ -123,7 +123,7 @@ class _ResetOtpScreenState extends State<ResetOtpScreen> {
 
     try {
       final response = await http.post(
-        Uri.parse("http://192.168.100.47:5000/api/auth/verify-reset-otp"),
+        Uri.parse("https://smarthire-1-xe6v.onrender.com/api/auth/verify-reset-otp"),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
           "email": widget.email,
@@ -179,7 +179,7 @@ class _ResetOtpScreenState extends State<ResetOtpScreen> {
 
     try {
       final response = await http.post(
-        Uri.parse("http://192.168.100.47:5000/api/auth/resend-otp"),
+        Uri.parse("https://smarthire-1-xe6v.onrender.com/api/auth/resend-otp"),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
           "email": widget.email,

@@ -83,7 +83,7 @@ class _ChatScreenState extends State<ChatScreen> {
     if (messageId == null) return;
 
     final res = await http.delete(
-      Uri.parse("http://192.168.100.47:5000/api/messages/$messageId"),
+      Uri.parse("https://smarthire-1-xe6v.onrender.com/api/messages/$messageId"),
       headers: {
         "Authorization": "Bearer $token",
         "Content-Type": "application/json",
@@ -167,7 +167,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final token = prefs.getString("token");
 
     final res = await http.get(
-      Uri.parse("http://192.168.100.47:5000/api/messages/$conversationId"),
+      Uri.parse("https://smarthire-1-xe6v.onrender.com/api/messages/$conversationId"),
       headers: {"Authorization": "Bearer $token"},
     );
 
@@ -205,7 +205,7 @@ class _ChatScreenState extends State<ChatScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
 
     final res = await http.post(
-      Uri.parse("http://192.168.100.47:5000/api/messages"),
+      Uri.parse("https://smarthire-1-xe6v.onrender.com/api/messages"),
       headers: {
         "Authorization": "Bearer $token",
         "Content-Type": "application/json"
@@ -253,7 +253,7 @@ class _ChatScreenState extends State<ChatScreen> {
       await loadUser();
       await fetchMessages();
 
-      socket = IO.io("http://192.168.100.47:5000", {
+      socket = IO.io("https://smarthire-1-xe6v.onrender.com", {
         "transports": ["websocket"],
         "autoConnect": true,
       });

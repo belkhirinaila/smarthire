@@ -16,7 +16,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   static const Color bgBottom = Color(0xFF050A12);
   static const Color cardColor = Color(0xFF121C31);
 
-  static const String baseUrl = "http://192.168.100.47:5000/api";
+  static const String baseUrl = "https://smarthire-1-xe6v.onrender.com/api";
 
   Future<String?> getToken() async {
     final prefs = await SharedPreferences.getInstance();

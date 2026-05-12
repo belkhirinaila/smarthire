@@ -17,7 +17,7 @@ class EditCompanyProfileScreen extends StatefulWidget {
 }
 
 class _EditCompanyProfileScreenState extends State<EditCompanyProfileScreen> {
-  static const String baseUrl = "http://192.168.100.47:5000";
+  static const String baseUrl = "https://smarthire-1-xe6v.onrender.com";
 
   static const Color primaryBlue = Color(0xFF1E6CFF);
   static const Color bgTop = Color(0xFF08162D);

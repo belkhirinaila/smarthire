@@ -17,8 +17,8 @@ class _MessagesScreenState extends State<MessagesScreen>
   static const Color backgroundBottom = Color(0xFF050A12);
   static const Color cardColor = Color(0xFF121C31);
 
-  static const String baseUrl = 'http://192.168.100.47:5000/api';
-  static const String serverUrl = 'http://192.168.100.47:5000';
+  static const String baseUrl = 'https://smarthire-1-xe6v.onrender.com/api';
+  static const String serverUrl = 'https://smarthire-1-xe6v.onrender.com';
 
   late TabController _tabController;
 
