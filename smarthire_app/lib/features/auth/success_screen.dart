@@ -144,7 +144,7 @@ class SuccessScreen extends StatelessWidget {
                   if (role == "candidate") {
                     Navigator.pushReplacementNamed(context, '/candidate');
                  } else {
-                    Navigator.pushReplacementNamed(context, '/company');
+                    Navigator.pushReplacementNamed(context, '/recruiter');
                   }
                   },
                     style: ElevatedButton.styleFrom(
@@ -182,9 +182,9 @@ class SuccessScreen extends StatelessWidget {
                         final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
   final role = args['role'];
   if (role == "candidate") {
-    Navigator.pushReplacementNamed(context, '/candidate');
+    Navigator.pushReplacementNamed(context, '/edit-profile');
   } else {
-    Navigator.pushReplacementNamed(context, '/recruiter');
+    Navigator.pushReplacementNamed(context, '/company-profile');
   }
 },
                     style: OutlinedButton.styleFrom(

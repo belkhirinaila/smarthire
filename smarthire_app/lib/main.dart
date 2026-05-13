@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:smarthire_app/route_observer.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// ==============================
 /// SPLASH / ONBOARDING
@@ -78,12 +79,38 @@ import 'package:smarthire_app/features/admin/admin_company_details_screen.dart';
 import 'package:smarthire_app/features/admin/admin_candidate_details_screen.dart';
 
 
-void main() {
-  runApp(const SmartHireApp());
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  final prefs = await SharedPreferences.getInstance();
+
+  final seenOnboarding = prefs.getBool('seenOnboarding') ?? false;
+
+  final token = prefs.getString('token');
+  final role = prefs.getString('role');
+
+  final isLoggedIn = token != null && token.isNotEmpty;
+
+  runApp(
+    SmartHireApp(
+      seenOnboarding: seenOnboarding,
+      isLoggedIn: isLoggedIn,
+      role: role,
+    ),
+  );
 }
 
 class SmartHireApp extends StatelessWidget {
-  const SmartHireApp({super.key});
+  final bool seenOnboarding;
+  final bool isLoggedIn;
+  final String? role;
+
+  const SmartHireApp({
+    super.key,
+    required this.seenOnboarding,
+    required this.isLoggedIn,
+    required this.role,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -97,8 +124,15 @@ class SmartHireApp extends StatelessWidget {
           child: child!,
         );
       },
-      initialRoute: '/',
-      navigatorObservers: [routeObserver],
+      initialRoute: !seenOnboarding
+    ? '/onboarding'
+    : isLoggedIn
+        ? role == 'recruiter'
+            ? '/recruiter'
+            : role == 'admin'
+                ? '/admin'
+                : '/candidate'
+        : '/welcome',
 
       routes: {
         /// ==============================
@@ -167,6 +201,8 @@ class SmartHireApp extends StatelessWidget {
           );
        },
         '/candidate-settings': (context) => const CandidateSettingsScreen(),
+        
+
 
         /// ==============================
         /// RECRUITER 🔥
@@ -213,6 +249,8 @@ class SmartHireApp extends StatelessWidget {
         '/settings': (context) => const SettingsScreen(),
         '/edit-company': (context) => const EditCompanyProfileScreen(),
         '/search-candidates': (context) => const SearchCandidatesScreen(),
+        '/candidate-search': (context) => const CandidateSearchScreen(),
+
         /// ==============================
         /// ADMIN
         /// ==============================
