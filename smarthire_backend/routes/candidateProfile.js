@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const db = require("../config/db");
+const bcrypt = require("bcryptjs");
 const { protect, authorize } = require("../middleware/authMiddleware");
 
 // GET /api/candidate-profile/me
@@ -76,21 +77,8 @@ router.post("/", protect, authorize("candidate"), async (req, res) => {
 // PUT /api/candidate-profile
 router.put("/", protect, authorize("candidate"), async (req, res) => {
   try {
-    const {
-      professional_headline,
-      location,
-      bio,
-      github_link,
-      behance_link,
-      personal_website,
-      profile_photo,
-      phone_number,
-      email
-
-    } = req.body;
-
     const [existing] = await db.query(
-      "SELECT id FROM candidate_profiles WHERE user_id = ?",
+      "SELECT * FROM candidate_profiles WHERE user_id = ?",
       [req.user.id]
     );
 
@@ -98,9 +86,46 @@ router.put("/", protect, authorize("candidate"), async (req, res) => {
       return res.status(404).json({ message: "Profil non trouvé" });
     }
 
+    const oldProfile = existing[0];
+
+    const professional_headline =
+      req.body.professional_headline ?? oldProfile.professional_headline;
+
+    const location =
+      req.body.location ?? oldProfile.location;
+
+    const bio =
+      req.body.bio ?? oldProfile.bio;
+
+    const github_link =
+      req.body.github_link ?? oldProfile.github_link;
+
+    const behance_link =
+      req.body.behance_link ?? oldProfile.behance_link;
+
+    const personal_website =
+      req.body.personal_website ?? oldProfile.personal_website;
+
+    const profile_photo =
+      req.body.profile_photo ?? oldProfile.profile_photo;
+
+    const phone_number =
+      req.body.phone_number ?? oldProfile.phone_number;
+
+    const email =
+      req.body.email ?? oldProfile.email;
+
     await db.query(
       `UPDATE candidate_profiles
-       SET professional_headline = ?, location = ?, bio = ?, github_link = ?, behance_link = ?, personal_website = ?, profile_photo = ?, phone_number = ?, email = ?
+       SET professional_headline = ?,
+           location = ?,
+           bio = ?,
+           github_link = ?,
+           behance_link = ?,
+           personal_website = ?,
+           profile_photo = ?,
+           phone_number = ?,
+           email = ?
        WHERE user_id = ?`,
       [
         professional_headline,
@@ -112,13 +137,20 @@ router.put("/", protect, authorize("candidate"), async (req, res) => {
         profile_photo,
         phone_number,
         email,
-        req.user.id
+        req.user.id,
       ]
     );
 
-    res.status(200).json({ message: "Profil mis à jour avec succès" });
+    res.status(200).json({
+      message: "Profil mis à jour avec succès",
+      profile_photo,
+    });
   } catch (err) {
-    res.status(500).json({ message: "Erreur serveur", error: err.message });
+    console.error("UPDATE CANDIDATE PROFILE ERROR:", err);
+    res.status(500).json({
+      message: "Erreur serveur",
+      error: err.message,
+    });
   }
 });
 
