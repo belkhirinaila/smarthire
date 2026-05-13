@@ -16,17 +16,18 @@ router.post(
         });
       }
 
+      const filePath = "/" + req.file.path.replace(/\\/g, "/");
+
       res.status(200).json({
         message: "Image uploaded successfully",
-        profile_photo: req.file.path,
+        profile_photo: filePath,
       });
     } catch (error) {
-      console.error(error);
+      console.error("UPLOAD PROFILE ERROR:", error);
       res.status(500).json({
         message: "Erreur serveur",
+        error: error.message,
       });
     }
   }
 );
-
-module.exports = router;
