@@ -153,7 +153,7 @@ router.put("/", protect, authorize("candidate"), async (req, res) => {
     });
   }
 });
-//1778548825022
+
 
 
 // ==============================

@@ -4,25 +4,18 @@ const db = require("../config/db");
 const { protect, authorize } = require("../middleware/authMiddleware");
 const multer = require("multer");
 const path = require("path");
+const fs = require("fs");
 
+const uploadPath = path.join(__dirname, "../uploads/company");
+fs.mkdirSync(uploadPath, { recursive: true });
 
-
-// ==============================
-// MULTER CONFIG
-// ==============================
 const storage = multer.diskStorage({
-
   destination: (req, file, cb) => {
-    cb(null, "uploads/company");
+    cb(null, uploadPath);
   },
 
   filename: (req, file, cb) => {
-
-    cb(
-      null,
-      Date.now() +
-        path.extname(file.originalname)
-    );
+    cb(null, Date.now() + path.extname(file.originalname));
   },
 });
 
@@ -125,23 +118,23 @@ router.post(
       let carte_fiscale = null;
 
       if (req.files?.logo) {
-        logo = req.files.logo[0].path;
+        logo = "/uploads/company/" + req.files.logo[0].filename
       }
 
       if (req.files?.cover_image) {
-        cover_image = req.files.cover_image[0].path;
+        cover_image = "/uploads/company/" + req.files.cover_image[0].filename
       }
 
       if (req.files?.registre_commerce) {
-        registre_commerce = req.files.registre_commerce[0].path;
+        registre_commerce = "/uploads/company/" + req.files.registre_commerce[0].filename;
       }
 
       if (req.files?.nif_nis) {
-        nif_nis = req.files.nif_nis[0].path;
+        nif_nis = "/uploads/company/" + req.files.nif_nis[0].filename;
       }
 
       if (req.files?.carte_fiscale) {
-        carte_fiscale = req.files.carte_fiscale[0].path;
+        carte_fiscale = "/uploads/company/" + req.files.carte_fiscale[0].filename;
       }
 
       const [existing] = await db.query(
@@ -240,23 +233,23 @@ router.put(
       let carte_fiscale = null;
 
       if (req.files?.logo) {
-        logo = req.files.logo[0].path;
+        logo = "/uploads/company/" + req.files.logo[0].filename;
       }
 
       if (req.files?.cover_image) {
-        cover_image = req.files.cover_image[0].path;
+        cover_image = "/uploads/company/" + req.files.cover_image[0].filename;
       }
 
       if (req.files?.registre_commerce) {
-        registre_commerce = req.files.registre_commerce[0].path;
+        registre_commerce = "/uploads/company/" + req.files.registre_commerce[0].filename;
       }
 
       if (req.files?.nif_nis) {
-        nif_nis = req.files.nif_nis[0].path;
+        nif_nis = "/uploads/company/" + req.files.nif_nis[0].filename;
       }
 
       if (req.files?.carte_fiscale) {
-        carte_fiscale = req.files.carte_fiscale[0].path;
+        carte_fiscale = "/uploads/company/" + req.files.carte_fiscale[0].filename;
       }
 
       const [existing] = await db.query(
