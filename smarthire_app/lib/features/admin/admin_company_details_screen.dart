@@ -18,8 +18,8 @@ class _AdminCompanyDetailsScreenState extends State<AdminCompanyDetailsScreen> {
   static const Color bgBottom = Color(0xFF050A12);
   static const Color cardColor = Color(0xFF121C31);
 
-  static const String serverUrl = "https://smarthire-1-xe6v.onrender.com";
-  static const String baseUrl = "https://smarthire-1-xe6v.onrender.com/api";
+  static const String serverUrl = "https://smarthire-fpa1.onrender.com";
+  static const String baseUrl = "https://smarthire-fpa1.onrender.com/api";
 
   late Map<String, dynamic> company;
   bool isLoading = false;

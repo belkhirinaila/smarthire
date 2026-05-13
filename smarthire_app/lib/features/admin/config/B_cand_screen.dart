@@ -28,7 +28,7 @@ class _BlockedCandidatesScreenState
       Color(0xFF121C31);
 
   static const String baseUrl =
-      "https://smarthire-1-xe6v.onrender.com/api";
+      "https://smarthire-fpa1.onrender.com/api";
 
   List candidates = [];
 

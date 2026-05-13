@@ -133,7 +133,7 @@ class _OtpScreenState extends State<OtpScreen> {
     try {
       /// Envoyer le code OTP au backend pour vérification.
       final response = await http.post(
-        Uri.parse("https://smarthire-1-xe6v.onrender.com/api/auth/verify-otp"),
+        Uri.parse("https://smarthire-fpa1.onrender.com/api/auth/verify-otp"),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
           "email": widget.email,
@@ -186,7 +186,7 @@ class _OtpScreenState extends State<OtpScreen> {
     try {
       /// Appel API pour renvoyer un nouveau code OTP.
       final response = await http.post(
-        Uri.parse("https://smarthire-1-xe6v.onrender.com/api/auth/resend-otp"),
+        Uri.parse("https://smarthire-fpa1.onrender.com/api/auth/resend-otp"),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
           "email": widget.email,

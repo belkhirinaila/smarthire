@@ -26,7 +26,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   static const Color cardColor = Color(0xFF121C31);
 
   // URL de base de l'API pour les appels liés au profil.
-  static const String baseUrl = 'https://smarthire-1-xe6v.onrender.com/api';
+  static const String baseUrl = 'https://smarthire-fpa1.onrender.com/api';
 
   // Contrôleurs de saisie pour chaque champ du formulaire.
   final TextEditingController headlineController = TextEditingController();

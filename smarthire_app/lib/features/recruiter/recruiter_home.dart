@@ -14,8 +14,8 @@ class RecruiterHome extends StatefulWidget {
 }
 
 class _RecruiterHomeState extends State<RecruiterHome> with RouteAware {
-  static const String baseUrl = 'https://smarthire-1-xe6v.onrender.com/api';
-  static const String serverUrl = 'https://smarthire-1-xe6v.onrender.com';
+  static const String baseUrl = 'https://smarthire-fpa1.onrender.com/api';
+  static const String serverUrl = 'https://smarthire-fpa1.onrender.com';
 
   static const Color primaryBlue = Color(0xFF1E6CFF);
   static const Color backgroundTop = Color(0xFF08162D);

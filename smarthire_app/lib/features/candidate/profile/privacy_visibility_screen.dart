@@ -27,7 +27,7 @@ class _PrivacyVisibilityScreenState extends State<PrivacyVisibilityScreen> {
   static const Color cardColor = Color(0xFF121C31);
 
   // URL de base du backend.
-  static const String baseUrl = 'https://smarthire-1-xe6v.onrender.com/api';
+  static const String baseUrl = 'https://smarthire-fpa1.onrender.com/api';
 
   // États de chargement et de sauvegarde.
   bool isLoading = true;

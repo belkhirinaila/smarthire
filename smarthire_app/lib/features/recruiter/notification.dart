@@ -20,7 +20,7 @@ class _RecruiterNotificationsScreenState
   static const Color backgroundBottom = Color(0xFF050A12);
   static const Color cardColor = Color(0xFF121C31);
 
-  static const String baseUrl = 'https://smarthire-1-xe6v.onrender.com/api';
+  static const String baseUrl = 'https://smarthire-fpa1.onrender.com/api';
 
   List notifications = [];
   bool isLoading = true;
@@ -38,7 +38,7 @@ class _RecruiterNotificationsScreenState
 
   void initSocket() {
     socket = IO.io(
-      "https://smarthire-1-xe6v.onrender.com",
+      "https://smarthire-fpa1.onrender.com",
       IO.OptionBuilder()
           .setTransports(['websocket'])
           .disableAutoConnect()
@@ -141,7 +141,7 @@ Future<void> markAllRead() async {
   final token = prefs.getString("token");
 
   await http.put(
-    Uri.parse("https://smarthire-1-xe6v.onrender.com/api/notifications/read-all/me"),
+    Uri.parse("https://smarthire-fpa1.onrender.com/api/notifications/read-all/me"),
     headers: {"Authorization": "Bearer $token"},
   );
 }

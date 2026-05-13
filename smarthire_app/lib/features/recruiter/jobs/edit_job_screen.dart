@@ -75,7 +75,7 @@ class _EditJobScreenState extends State<EditJobScreen> {
     final token = prefs.getString("token");
 
     final res = await http.put(
-      Uri.parse("https://smarthire-1-xe6v.onrender.com/api/recruiter/jobs/${widget.job["id"]}"),
+      Uri.parse("https://smarthire-fpa1.onrender.com/api/recruiter/jobs/${widget.job["id"]}"),
       headers: {
         "Authorization": "Bearer $token",
         "Content-Type": "application/json"

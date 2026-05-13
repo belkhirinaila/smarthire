@@ -21,7 +21,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   static const Color cardColor = Color(0xFF121C31);
 
   // URL de base vers l'API backend.
-  static const String baseUrl = 'https://smarthire-1-xe6v.onrender.com/api';
+  static const String baseUrl = 'https://smarthire-fpa1.onrender.com/api';
 
   // Données des notifications et états de chargement / marquage.
   List<dynamic> notifications = [];

@@ -21,8 +21,8 @@ class _CandidateProfileScreenState extends State<CandidateProfileScreen> {
   static const Color cardColor = Color(0xFF121C31);
   static const Color cardBorderColor = Color(0x0AFFFFFF);
 
-  static const String baseUrl = 'https://smarthire-1-xe6v.onrender.com/api';
-  static const String serverUrl = 'https://smarthire-1-xe6v.onrender.com';
+  static const String baseUrl = 'https://smarthire-fpa1.onrender.com/api';
+  static const String serverUrl = 'https://smarthire-fpa1.onrender.com';
 
   Map<String, dynamic>? profile;
   bool isLoading = true;

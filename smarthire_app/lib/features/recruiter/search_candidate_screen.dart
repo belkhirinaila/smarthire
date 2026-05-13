@@ -21,7 +21,7 @@ class _SearchCandidatesScreenState
   TextEditingController searchController = TextEditingController();
 
   final String baseUrl =
-      "https://smarthire-1-xe6v.onrender.com/api/recruiter";
+      "https://smarthire-fpa1.onrender.com/api/recruiter";
 
 
   // 🔑 TOKEN
@@ -136,7 +136,7 @@ class _SearchCandidatesScreenState
                                 (c["profile_photo"] != null &&
                                         c["profile_photo"] != "")
                                     ? NetworkImage(
-                                        "https://smarthire-1-xe6v.onrender.com/uploads/${c["profile_photo"]}")
+                                        "https://smarthire-fpa1.onrender.com/uploads/${c["profile_photo"]}")
                                     : null,
                             child: c["profile_photo"] ==
                                         null ||

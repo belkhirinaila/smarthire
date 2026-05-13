@@ -14,7 +14,7 @@ class _JobDetailsScreenState extends State<JobDetailsScreen> {
   /// ==============================
   /// Base URL API
   /// ==============================
-  static const String baseUrl = 'https://smarthire-1-xe6v.onrender.com/api';
+  static const String baseUrl = 'https://smarthire-fpa1.onrender.com/api';
 
   /// ==============================
   /// Couleurs principales

@@ -12,7 +12,7 @@ class CompanyProfileScreen extends StatefulWidget {
 }
 
 class _CompanyProfileScreenState extends State<CompanyProfileScreen> {
-  static const String baseUrl = "https://smarthire-1-xe6v.onrender.com";
+  static const String baseUrl = "https://smarthire-fpa1.onrender.com";
 
   static const Color primaryBlue = Color(0xFF1E6CFF);
   static const Color background = Color(0xFF050A12);

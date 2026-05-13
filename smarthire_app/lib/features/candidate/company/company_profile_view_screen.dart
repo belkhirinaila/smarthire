@@ -34,7 +34,7 @@ class _CompanyProfileViewScreenState
 
       final res = await http.get(
         Uri.parse(
-          "https://smarthire-1-xe6v.onrender.com/api/company-profile/${widget.companyId}",
+          "https://smarthire-fpa1.onrender.com/api/company-profile/${widget.companyId}",
         ),
       );
 
@@ -138,7 +138,7 @@ class _CompanyProfileViewScreenState
                     image: company!["cover_image"] != null
                         ? DecorationImage(
                             image: NetworkImage(
-                              "https://smarthire-1-xe6v.onrender.com${company!["cover_image"]}",
+                              "https://smarthire-fpa1.onrender.com${company!["cover_image"]}",
                             ),
                             fit: BoxFit.cover,
                           )
@@ -203,7 +203,7 @@ class _CompanyProfileViewScreenState
 
                         backgroundImage: company!["logo"] != null
                             ? NetworkImage(
-                                "https://smarthire-1-xe6v.onrender.com${company!["logo"]}",
+                                "https://smarthire-fpa1.onrender.com${company!["logo"]}",
                               )
                             : null,
 

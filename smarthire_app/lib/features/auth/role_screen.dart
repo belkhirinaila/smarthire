@@ -50,7 +50,7 @@ class _RoleScreenState extends State<RoleScreen> {
 
     try {
       final response = await http.post(
-        Uri.parse("https://smarthire-1-xe6v.onrender.com/api/auth/register"),
+        Uri.parse("https://smarthire-fpa1.onrender.com/api/auth/register"),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
           "full_name": fullName,

@@ -8,7 +8,7 @@ class AdminCandidateDetailsScreen extends StatelessWidget {
   static const Color bgBottom = Color(0xFF050A12);
   static const Color cardColor = Color(0xFF121C31);
 
-  static const String serverUrl = "https://smarthire-1-xe6v.onrender.com";
+  static const String serverUrl = "https://smarthire-fpa1.onrender.com";
 
   String fileUrl(String? path) {
     if (path == null || path.isEmpty) return "";

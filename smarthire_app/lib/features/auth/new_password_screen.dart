@@ -89,7 +89,7 @@ class _NewPasswordScreenState extends State<NewPasswordScreen> {
     try {
       // Envoi de la requête POST au backend avec l'email et le nouveau mot de passe.
       final response = await http.post(
-        Uri.parse("https://smarthire-1-xe6v.onrender.com/api/auth/reset-password"),
+        Uri.parse("https://smarthire-fpa1.onrender.com/api/auth/reset-password"),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
           "email": email,

@@ -27,7 +27,7 @@ class _ExperienceEducationScreenState extends State<ExperienceEducationScreen> {
   static const Color cardColor = Color(0xFF121C31);
 
   // URL de base de l'API.
-  static const String baseUrl = 'https://smarthire-1-xe6v.onrender.com/api';
+  static const String baseUrl = 'https://smarthire-fpa1.onrender.com/api';
 
   // États pour le chargement de la page, l'état de sauvegarde et les erreurs.
   bool isLoading = true;

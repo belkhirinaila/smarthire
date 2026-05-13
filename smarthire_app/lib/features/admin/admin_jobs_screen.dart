@@ -16,7 +16,7 @@ class _AdminJobsScreenState extends State<AdminJobsScreen> {
   static const Color backgroundBottom = Color(0xFF050A12);
   static const Color cardColor = Color(0xFF121C31);
 
-  static const String baseUrl = 'https://smarthire-1-xe6v.onrender.com/api';
+  static const String baseUrl = 'https://smarthire-fpa1.onrender.com/api';
 
   List jobs = [];
   bool isLoading = true;

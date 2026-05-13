@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class RequestService {
-  static const String baseUrl = "https://smarthire-1-xe6v.onrender.com";
+  static const String baseUrl = "https://smarthire-fpa1.onrender.com";
 
   static Future<bool> sendRequest(int candidateId) async {
     try {

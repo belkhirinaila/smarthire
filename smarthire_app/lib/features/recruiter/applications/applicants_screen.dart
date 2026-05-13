@@ -20,7 +20,7 @@ class _ApplicantsScreenState extends State<ApplicantsScreen> {
   static const Color backgroundBottom = Color(0xFF050A12);
   static const Color cardColor = Color(0xFF121C31);
 
-  static const String baseUrl = 'https://smarthire-1-xe6v.onrender.com/api';
+  static const String baseUrl = 'https://smarthire-fpa1.onrender.com/api';
 
   List applicants = [];
   bool isLoading = true;

@@ -21,7 +21,7 @@ class _DirectChatThreadScreenState extends State<DirectChatThreadScreen> {
   static const Color otherMessageColor = Color(0xFF121C31);
 
   // URL de base vers l'API backend.
-  static const String baseUrl = 'https://smarthire-1-xe6v.onrender.com/api';
+  static const String baseUrl = 'https://smarthire-fpa1.onrender.com/api';
 
   // Contrôleur pour le champ de saisie de message.
   final TextEditingController messageController = TextEditingController();
