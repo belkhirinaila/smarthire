@@ -2,16 +2,11 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 
-// ==============================
-// CREATE FOLDER IF NOT EXISTS
-// ==============================
-const uploadPath = "uploads/profile";
+const uploadPath = path.join(__dirname, "../uploads/profile");
 
+// CREATE FOLDER
 fs.mkdirSync(uploadPath, { recursive: true });
 
-// ==============================
-// STORAGE
-// ==============================
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, uploadPath);
@@ -25,9 +20,6 @@ const storage = multer.diskStorage({
   },
 });
 
-// ==============================
-// MULTER
-// ==============================
 const upload = multer({
   storage: storage,
 });
