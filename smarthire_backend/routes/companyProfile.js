@@ -3,21 +3,31 @@ const router = express.Router();
 const db = require("../config/db");
 const { protect, authorize } = require("../middleware/authMiddleware");
 const multer = require("multer");
-const path = require("path");
+const { CloudinaryStorage } = require("multer-storage-cloudinary");
+const cloudinary = require("../config/cloudinary");
 const fs = require("fs");
 
 const uploadPath = path.join(__dirname, "../uploads/company");
 fs.mkdirSync(uploadPath, { recursive: true });
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadPath);
-  },
-
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + path.extname(file.originalname));
+const storage = new CloudinaryStorage({
+  cloudinary,
+  params: async (req, file) => {
+    return {
+      folder: "smarthire/company",
+      resource_type: "auto",
+      allowed_formats: [
+        "jpg",
+        "jpeg",
+        "png",
+        "webp",
+        "pdf",
+      ],
+    };
   },
 });
+
+const upload = multer({ storage });
 
 const upload = multer({ storage });
 
@@ -118,23 +128,23 @@ router.post(
       let carte_fiscale = null;
 
       if (req.files?.logo) {
-        logo = "/uploads/company/" + req.files.logo[0].filename
+        logo = req.files.logo[0].path;
       }
 
       if (req.files?.cover_image) {
-        cover_image = "/uploads/company/" + req.files.cover_image[0].filename
+        cover_image =req.files.cover_image[0].path;
       }
 
       if (req.files?.registre_commerce) {
-        registre_commerce = "/uploads/company/" + req.files.registre_commerce[0].filename;
+        registre_commerce = req.files.registre_commerce[0].path;
       }
 
       if (req.files?.nif_nis) {
-        nif_nis = "/uploads/company/" + req.files.nif_nis[0].filename;
+        nif_nis = req.files.nif_nis[0].path;
       }
 
       if (req.files?.carte_fiscale) {
-        carte_fiscale = "/uploads/company/" + req.files.carte_fiscale[0].filename;
+        carte_fiscale = req.files.carte_fiscale[0].path;
       }
 
       const [existing] = await db.query(
@@ -233,23 +243,23 @@ router.put(
       let carte_fiscale = null;
 
       if (req.files?.logo) {
-        logo = "/uploads/company/" + req.files.logo[0].filename;
+        logo = req.files.logo[0].path;
       }
 
       if (req.files?.cover_image) {
-        cover_image = "/uploads/company/" + req.files.cover_image[0].filename;
+        cover_image = req.files.cover_image[0].path;
       }
 
       if (req.files?.registre_commerce) {
-        registre_commerce = "/uploads/company/" + req.files.registre_commerce[0].filename;
+        registre_commerce = req.files.registre_commerce[0].path;
       }
 
       if (req.files?.nif_nis) {
-        nif_nis = "/uploads/company/" + req.files.nif_nis[0].filename;
+        nif_nis = req.files.nif_nis[0].path;
       }
 
       if (req.files?.carte_fiscale) {
-        carte_fiscale = "/uploads/company/" + req.files.carte_fiscale[0].filename;
+        carte_fiscale = req.files.carte_fiscale[0].path;
       }
 
       const [existing] = await db.query(
