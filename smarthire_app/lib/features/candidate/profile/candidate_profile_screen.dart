@@ -174,7 +174,7 @@ class _CandidateProfileScreenState extends State<CandidateProfileScreen> {
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Photo updated successfully ✅")),
+        const SnackBar(content: Text("Photo updated successfully ")),
       );
     } else {
       if (!mounted) return;
