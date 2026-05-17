@@ -2,12 +2,16 @@ const express = require("express");
 const router = express.Router();
 const db = require("../config/db");
 const { protect, authorize } = require("../middleware/authMiddleware");
+
 const multer = require("multer");
 const { CloudinaryStorage } = require("multer-storage-cloudinary");
 const cloudinary = require("../config/cloudinary");
+
 const fs = require("fs");
+const path = require("path"); // ✅ AJOUTE ÇA
 
 const uploadPath = path.join(__dirname, "../uploads/company");
+
 fs.mkdirSync(uploadPath, { recursive: true });
 
 const storage = new CloudinaryStorage({
@@ -27,9 +31,7 @@ const storage = new CloudinaryStorage({
   },
 });
 
-const upload = multer({ storage });
-
-const upload = multer({ storage });
+const upload = multer({ storage }); // ✅ UNE SEULE FOIS
 
 
 // ==============================
